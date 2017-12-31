@@ -14,6 +14,7 @@
 #include <condition_variable>
 #include <dbt.h>
 #include <tchar.h>
+#include <atlstr.h>
 
 #include "cond_var.h"
 
@@ -42,8 +43,10 @@ GUID GUID_DEVINTERFACE_USB_DEVICE = {
 	0xED };
 
 struct data_t {
-	int index;
-	int data;
+	int deviceNumber;
+	std::string serialNumber;
+	std::string productId;
+	std::string vendorId;
 	std::string driveLetter;
 };
 
@@ -76,14 +79,24 @@ public:
 	void HandleProgressCallback(const T *data, size_t count) {
 		HandleScope scope;
 		v8::Local<v8::Object> obj = Nan::New<v8::Object>();
+
+
 		Nan::Set(
 			obj,
-			Nan::New("index").ToLocalChecked(),
-			New<v8::Integer>(data->index));
+			Nan::New("deviceNumber").ToLocalChecked(),
+			New<v8::Integer>(data->deviceNumber));
 		Nan::Set(
 			obj,
-			Nan::New("data").ToLocalChecked(),
-			New<v8::Integer>(data->data));
+			Nan::New("vendorId").ToLocalChecked(),
+			New<v8::String>(data->vendorId.c_str()).ToLocalChecked());
+		Nan::Set(
+			obj,
+			Nan::New("serialNumber").ToLocalChecked(),
+			New<v8::String>(data->serialNumber.c_str()).ToLocalChecked());
+		Nan::Set(
+			obj,
+			Nan::New("productId").ToLocalChecked(),
+			New<v8::String>(data->productId.c_str()).ToLocalChecked());
 		Nan::Set(
 			obj,
 			Nan::New("driveLetter").ToLocalChecked(),
@@ -100,8 +113,8 @@ private:
 NAN_METHOD(SpyOn)
 {
 //#ifdef DEBUG
-//	Callback *progress = new Callback();
-//	Callback *callback = new Callback();
+	/*Callback *progress = new Callback();
+	Callback *callback = new Callback();*/
 //#else 
 	Callback *progress = new Callback(To<v8::Function>(info[0]).ToLocalChecked());
 	Callback *callback = new Callback(To<v8::Function>(info[1]).ToLocalChecked());
@@ -214,22 +227,55 @@ LRESULT CALLBACK SpyCallback(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			{
 				pDevInf = (PDEV_BROADCAST_DEVICEINTERFACE)pHdr;
 				data_t d;
-				d.data = 100;
-				d.index = 0;
+
+				int len = 0;
+
+				CString szDevId = pDevInf->dbcc_name + 4;
+				len = szDevId.GetLength();
+				int idx = szDevId.ReverseFind(_T('#'));
+				szDevId.Truncate(idx);
+				len = szDevId.GetLength() - 1;
+
+				CString serialNumber;
+				idx = szDevId.ReverseFind(_T('#'));
+				serialNumber = szDevId.Right(len - idx);
+				szDevId.Truncate(idx);
+				len = szDevId.GetLength() - 1;
+				d.serialNumber = serialNumber;
+
+				CString productId;
+				idx = szDevId.ReverseFind(_T('&'));
+				productId = szDevId.Right(len - idx);
+				int idx1 = productId.ReverseFind(_T('_'));
+				len = productId.GetLength() - 1;
+				productId = productId.Right(len - idx1);
+				szDevId.Truncate(idx);
+				len = szDevId.GetLength() - 1;
+				d.productId = productId;
+
+				CString vendorId;
+				idx = szDevId.ReverseFind(_T('#'));
+				vendorId = szDevId.Right(len - idx);
+				idx1 = vendorId.ReverseFind(_T('_'));
+				len = vendorId.GetLength() - 1;
+				vendorId = vendorId.Right(len - idx1);
+				d.vendorId = vendorId;
 
 				_sleep(3000);
 
 				// Get available drives we can monitor
 				DWORD drives_bitmask = GetLogicalDrives();
 				int i = 1;
+				int deviceNumber = 1;
 				while (drives_bitmask)
 				{
 					if (drives_bitmask & 1) {
 						TCHAR drive[] = { TEXT('A') + i, TEXT(':'), TEXT('\\'), TEXT('\0') };
 						if (GetDriveType(drive) == DRIVE_REMOVABLE)
 						{
-							std::cout << "The drive " << drive << " is USB" << std::endl;
 							d.driveLetter = drive;
+							d.deviceNumber = deviceNumber;
+							deviceNumber++;
 						}
 					}
 					drives_bitmask >>= 1;
