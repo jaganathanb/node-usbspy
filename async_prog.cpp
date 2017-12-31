@@ -13,6 +13,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <dbt.h>
+#include <tchar.h>
 
 #include "cond_var.h"
 
@@ -20,9 +21,7 @@ using namespace Nan; // NOLINT(build/namespaces)
 
 std::mutex m;
 std::condition_variable cv;
-std::string data;
-bool ready = true;
-bool process = true;
+bool ready = false;
 
 DWORD WINAPI SpyingThread();
 LRESULT CALLBACK SpyCallback(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -45,7 +44,7 @@ GUID GUID_DEVINTERFACE_USB_DEVICE = {
 struct data_t {
 	int index;
 	int data;
-	int dd;
+	std::string driveLetter;
 };
 
 const typename AsyncProgressQueueWorker<data_t>::ExecutionProgress *globalProgress;
@@ -53,12 +52,9 @@ const typename AsyncProgressQueueWorker<data_t>::ExecutionProgress *globalProgre
 template<typename T>
 class ProgressQueueWorker : public AsyncProgressQueueWorker<T> {
 public:
-	ProgressQueueWorker(
-		Callback *callback
-		, Callback *progress
-		, int iters)
-		: AsyncProgressQueueWorker<T>(callback), progress(progress)
-		, iters(iters) {}
+	ProgressQueueWorker(Callback *callback, Callback *progress) : AsyncProgressQueueWorker<T>(callback), progress(progress) {
+
+	}
 
 	~ProgressQueueWorker() {
 		delete progress;
@@ -72,6 +68,9 @@ public:
 		while (ready) {
 			cv.wait(lk);
 		}
+
+		lk.unlock();
+		cv.notify_one();
 	}
 
 	void HandleProgressCallback(const T *data, size_t count) {
@@ -87,8 +86,8 @@ public:
 			New<v8::Integer>(data->data));
 		Nan::Set(
 			obj,
-			Nan::New("dd").ToLocalChecked(),
-			New<v8::Integer>(data->dd));
+			Nan::New("driveLetter").ToLocalChecked(),
+			New<v8::String>(data->driveLetter.c_str()).ToLocalChecked());
 
 		v8::Local<v8::Value> argv[] = { obj };
 		progress->Call(1, argv);
@@ -96,17 +95,22 @@ public:
 
 private:
 	Callback * progress;
-	int iters;
 };
 
-NAN_METHOD(DoProgress)
+NAN_METHOD(SpyOn)
 {
-	Callback *progress = new Callback(To<v8::Function>(info[1]).ToLocalChecked());
-	Callback *callback = new Callback(To<v8::Function>(info[2]).ToLocalChecked());
-	AsyncQueueWorker(new ProgressQueueWorker<data_t>(callback, progress, To<uint32_t>(info[0]).FromJust()));
+//#ifdef DEBUG
+//	Callback *progress = new Callback();
+//	Callback *callback = new Callback();
+//#else 
+	Callback *progress = new Callback(To<v8::Function>(info[0]).ToLocalChecked());
+	Callback *callback = new Callback(To<v8::Function>(info[1]).ToLocalChecked());
+//#endif // DEBUG
+
+	AsyncQueueWorker(new ProgressQueueWorker<data_t>(callback, progress));
 }
 
-NAN_METHOD(On)
+void StartSpying()
 {
 	{
 		std::lock_guard<std::mutex> lk(m);
@@ -114,9 +118,11 @@ NAN_METHOD(On)
 		std::cout << "main() signals data ready for processing\n" << std::endl;
 	}
 	cv.notify_one();
+
+	//New<v8::FunctionTemplate>(SpyOn)->GetFunction()->CallAsConstructor(0, {});
 }
 
-NAN_METHOD(Off)
+NAN_METHOD(SpyOff)
 {
 	{
 		std::lock_guard<std::mutex> lk(m);
@@ -128,57 +134,17 @@ NAN_METHOD(Off)
 
 NAN_MODULE_INIT(Init)
 {
-	Set(target, New<v8::String>("doProgress").ToLocalChecked(), New<v8::FunctionTemplate>(DoProgress)->GetFunction());
-	Set(target, New<v8::String>("spyOn").ToLocalChecked(), New<v8::FunctionTemplate>(On)->GetFunction());
-	Set(target, New<v8::String>("spyOff").ToLocalChecked(), New<v8::FunctionTemplate>(Off)->GetFunction());
-	//(New<v8::FunctionTemplate>(On)->GetFunction())->CallAsConstructor(0, NULL);
-}
-
-void worker_thread()
-{
-	// Wait until main() sends data
-	std::unique_lock<std::mutex> lk(m);
-	cv.wait(lk, [] { return ready; });
-
-	// after the wait, we own the lock.
-	std::cout << "Worker thread is processing data\n";
-	data += " after processing";
-
-	std::cout << "Worker thread signals data processing completed\n";
-
-	// Manual unlocking is done before notifying, to avoid waking up
-	// the waiting thread only to block again (see notify_one for details)
-	lk.unlock();
-	cv.notify_one();
-}
-
-int main()
-{
-	std::thread worker(worker_thread);
-
-	data = "Example data";
-	// send data to the worker thread
-	{
-		std::lock_guard<std::mutex> lk(m);
-		ready = true;
-		std::cout << "main() signals data ready for processing\n";
-	}
-	cv.notify_one();
-
-	std::cout << "Back in main(), data = " << data << '\n';
-
-	worker.join();
+	Set(target, New<v8::String>("spyOn").ToLocalChecked(), New<v8::FunctionTemplate>(SpyOn)->GetFunction());
+	Set(target, New<v8::String>("spyOff").ToLocalChecked(), New<v8::FunctionTemplate>(SpyOff)->GetFunction());
+	StartSpying();
 }
 
 void processData(const typename AsyncProgressQueueWorker<data_t>::ExecutionProgress& progress) {
-	data_t *dt = new data_t();
-	dt->data = 10;
-	dt->index = 0;
-	progress.Send(dt, sizeof(data_t));
 	globalProgress = &progress;
 
 	std::thread worker(SpyingThread);
 	worker.detach();
+	//worker.join();
 }
 
 DWORD WINAPI SpyingThread()
@@ -225,7 +191,6 @@ DWORD WINAPI SpyingThread()
 		BOOL bRet = GetMessage(&msg, hwnd, 0, 0);
 		if ((bRet == 0) || (bRet == -1))
 		{
-			std::cout << "Done! gets message \n" << std::endl;
 			break;
 		}
 
@@ -248,11 +213,32 @@ LRESULT CALLBACK SpyCallback(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			if (pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE)
 			{
 				pDevInf = (PDEV_BROADCAST_DEVICEINTERFACE)pHdr;
-				data_t *d = new data_t();
-				d->data = 100;
-				d->dd = pDevInf->dbcc_devicetype;
-				globalProgress->Send(d, sizeof(d));
+				data_t d;
+				d.data = 100;
+				d.index = 0;
+
+				_sleep(3000);
+
+				// Get available drives we can monitor
+				DWORD drives_bitmask = GetLogicalDrives();
+				int i = 1;
+				while (drives_bitmask)
+				{
+					if (drives_bitmask & 1) {
+						TCHAR drive[] = { TEXT('A') + i, TEXT(':'), TEXT('\\'), TEXT('\0') };
+						if (GetDriveType(drive) == DRIVE_REMOVABLE)
+						{
+							std::cout << "The drive " << drive << " is USB" << std::endl;
+							d.driveLetter = drive;
+						}
+					}
+					drives_bitmask >>= 1;
+					i++;
+				}
+
+				globalProgress->Send(&d, 1);
 			}
+
 		}
 	}
 
