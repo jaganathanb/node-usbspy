@@ -15,6 +15,11 @@
 #include <dbt.h>
 #include <tchar.h>
 #include <atlstr.h>
+#include <map>
+#include <vector>
+#include <algorithm>
+
+#include <Setupapi.h>
 
 #include "cond_var.h"
 
@@ -42,15 +47,106 @@ GUID GUID_DEVINTERFACE_USB_DEVICE = {
 	0x51,
 	0xED };
 
-struct data_t {
+typedef struct Device_t {
 	int deviceNumber;
+	int deviceStatus;
 	std::string serialNumber;
 	std::string productId;
 	std::string vendorId;
 	std::string driveLetter;
-};
 
-const typename AsyncProgressQueueWorker<data_t>::ExecutionProgress *globalProgress;
+	Device_t() {
+		key = NULL;
+	}
+
+	~Device_t() {
+		if (this->key != NULL) {
+			delete this->key;
+		}
+	}
+
+	void SetKey(const char* key) {
+		if (this->key != NULL) {
+			delete this->key;
+		}
+		this->key = new char[strlen(key) + 1];
+		memcpy(this->key, key, strlen(key) + 1);
+	}
+
+	char* GetKey() {
+		return this->key;
+	}
+
+private:
+	char* key;
+
+} Device;
+
+typedef enum  DeviceStatus_t {
+	Disconnect = 0,
+	Connect
+} DeviceStatus;
+
+const typename AsyncProgressQueueWorker<Device>::ExecutionProgress *globalProgress;
+
+Device *PopulateAvailableUSBDeviceList(bool adjustDeviceList);
+
+std::map<std::string, Device*> deviceMap;
+
+void AddDevice(const char *key, Device *item)
+{
+	item->SetKey(key);
+	deviceMap.insert(std::pair<std::string, Device *>(item->GetKey(), item));
+}
+
+void RemoveDevice(Device *item)
+{
+	deviceMap.erase(item->GetKey());
+}
+
+Device *GetDevice(const char *key)
+{
+	std::map<std::string, Device *>::iterator it;
+
+	it = deviceMap.find(key);
+	if (it == deviceMap.end())
+	{
+		return NULL;
+	}
+	else
+	{
+		return it->second;
+	}
+}
+
+void MapDeviceProps(Device *destiDevice, Device *sourceDevice)
+{
+	destiDevice->deviceStatus = sourceDevice->deviceStatus;
+	destiDevice->vendorId = sourceDevice->vendorId;
+	destiDevice->productId = sourceDevice->productId;
+	destiDevice->vendorId = sourceDevice->vendorId;
+	destiDevice->productId = sourceDevice->productId;
+	destiDevice->serialNumber = sourceDevice->serialNumber;
+	destiDevice->deviceNumber = sourceDevice->deviceNumber;
+	destiDevice->driveLetter = sourceDevice->driveLetter;
+}
+
+bool hasDevice(const char *key)
+{
+	std::map<std::string, Device *>::iterator it;
+
+	it = deviceMap.find(key);
+	if (it == deviceMap.end())
+	{
+		return false;
+	}
+	else
+	{
+		return true;
+	}
+
+	return true;
+}
 
 template<typename T>
 class ProgressQueueWorker : public AsyncProgressQueueWorker<T> {
@@ -87,6 +183,10 @@ public:
 			New<v8::Integer>(data->deviceNumber));
 		Nan::Set(
 			obj,
+			Nan::New("deviceStatus").ToLocalChecked(),
+			New<v8::Integer>(data->deviceStatus));
+		Nan::Set(
+			obj,
 			Nan::New("vendorId").ToLocalChecked(),
 			New<v8::String>(data->vendorId.c_str()).ToLocalChecked());
 		Nan::Set(
@@ -112,15 +212,15 @@ private:
 
 NAN_METHOD(SpyOn)
 {
-//#ifdef DEBUG
+	//#ifdef DEBUG
 	/*Callback *progress = new Callback();
 	Callback *callback = new Callback();*/
-//#else 
+	//#else 
 	Callback *progress = new Callback(To<v8::Function>(info[0]).ToLocalChecked());
 	Callback *callback = new Callback(To<v8::Function>(info[1]).ToLocalChecked());
-//#endif // DEBUG
+	//#endif // DEBUG
 
-	AsyncQueueWorker(new ProgressQueueWorker<data_t>(callback, progress));
+	AsyncQueueWorker(new ProgressQueueWorker<Device>(callback, progress));
 }
 
 void StartSpying()
@@ -152,8 +252,10 @@ NAN_MODULE_INIT(Init)
 	StartSpying();
 }
 
-void processData(const typename AsyncProgressQueueWorker<data_t>::ExecutionProgress& progress) {
+void processData(const typename AsyncProgressQueueWorker<Device>::ExecutionProgress& progress) {
 	globalProgress = &progress;
+
+	PopulateAvailableUSBDeviceList(false);
 
 	std::thread worker(SpyingThread);
 	worker.detach();
@@ -214,6 +316,194 @@ DWORD WINAPI SpyingThread()
 	return 0;
 }
 
+void ExtractDeviceInfo(CString name, Device *device) {
+	int len = 0;
+
+	CString szDevId = name;
+	len = szDevId.GetLength();
+	int idx = szDevId.ReverseFind(_T('#'));
+	szDevId.Truncate(idx);
+	len = szDevId.GetLength() - 1;
+
+	CString serialNumber;
+	idx = szDevId.ReverseFind(_T('#'));
+	serialNumber = szDevId.Right(len - idx);
+	szDevId.Truncate(idx);
+	len = szDevId.GetLength() - 1;
+	device->serialNumber = serialNumber;
+
+	CString productId;
+	idx = szDevId.ReverseFind(_T('&'));
+	productId = szDevId.Right(len - idx);
+	int idx1 = productId.ReverseFind(_T('_'));
+	len = productId.GetLength() - 1;
+	productId = productId.Right(len - idx1);
+	szDevId.Truncate(idx);
+	len = szDevId.GetLength() - 1;
+	device->productId = productId;
+
+	CString vendorId;
+	idx = szDevId.ReverseFind(_T('#'));
+	vendorId = szDevId.Right(len - idx);
+	idx1 = vendorId.ReverseFind(_T('_'));
+	len = vendorId.GetLength() - 1;
+	vendorId = vendorId.Right(len - idx1);
+	device->vendorId = vendorId;
+}
+
+DWORD GetUSBDriveDetails(UINT nDriveNumber IN, Device *device OUT)
+{
+	DWORD dwRet = NO_ERROR;
+
+	// Format physical drive path (may be '\\.\PhysicalDrive0', '\\.\PhysicalDrive1' and so on).
+	CString strDrivePath;
+	//sprintf(szBuf, "\\\\?\\%c:", 'A' + drive);
+	strDrivePath.Format(_T("\\\\.\\%c:"), 'A' + nDriveNumber);
+
+	// Get a handle to physical drive
+	HANDLE hDevice = ::CreateFile(strDrivePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
+		NULL, OPEN_EXISTING, 0, NULL);
+
+	if (INVALID_HANDLE_VALUE == hDevice)
+		return ::GetLastError();
+
+	// Set the input data structure
+	STORAGE_PROPERTY_QUERY storagePropertyQuery;
+	ZeroMemory(&storagePropertyQuery, sizeof(STORAGE_PROPERTY_QUERY));
+	storagePropertyQuery.PropertyId = StorageDeviceProperty;
+	storagePropertyQuery.QueryType = PropertyStandardQuery;
+
+	// Get the necessary output buffer size
+	STORAGE_DESCRIPTOR_HEADER storageDescriptorHeader = { 0 };
+	DWORD dwBytesReturned = 0;
+	if (!::DeviceIoControl(hDevice, IOCTL_STORAGE_QUERY_PROPERTY,
+		&storagePropertyQuery, sizeof(STORAGE_PROPERTY_QUERY),
+		&storageDescriptorHeader, sizeof(STORAGE_DESCRIPTOR_HEADER),
+		&dwBytesReturned, NULL))
+	{
+		dwRet = ::GetLastError();
+		::CloseHandle(hDevice);
+		return dwRet;
+	}
+
+	// Alloc the output buffer
+	const DWORD dwOutBufferSize = storageDescriptorHeader.Size;
+	BYTE* pOutBuffer = new BYTE[dwOutBufferSize];
+	ZeroMemory(pOutBuffer, dwOutBufferSize);
+
+	// Get the storage device descriptor
+	if (!::DeviceIoControl(hDevice, IOCTL_STORAGE_QUERY_PROPERTY,
+		&storagePropertyQuery, sizeof(STORAGE_PROPERTY_QUERY),
+		pOutBuffer, dwOutBufferSize,
+		&dwBytesReturned, NULL))
+	{
+		dwRet = ::GetLastError();
+		delete[]pOutBuffer;
+		::CloseHandle(hDevice);
+		return dwRet;
+	}
+
+	// Now, the output buffer points to a STORAGE_DEVICE_DESCRIPTOR structure
+	// followed by additional info like vendor ID, product ID, serial number, and so on.
+	STORAGE_DEVICE_DESCRIPTOR* pDeviceDescriptor = (STORAGE_DEVICE_DESCRIPTOR*)pOutBuffer;
+	const DWORD dwSerialNumberOffset = pDeviceDescriptor->SerialNumberOffset;
+	if (dwSerialNumberOffset != 0)
+	{
+		// Finally, get the serial number
+		device->productId = CString(pOutBuffer + pDeviceDescriptor->ProductIdOffset);
+	}
+
+	if (pDeviceDescriptor->ProductIdOffset != 0)
+	{
+		// Finally, get the serial number
+		device->productId = CString(pOutBuffer + pDeviceDescriptor->ProductIdOffset);
+	}
+
+	if (pDeviceDescriptor->VendorIdOffset != 0)
+	{
+		// Finally, get the serial number
+		device->vendorId = CString(pOutBuffer + pDeviceDescriptor->VendorIdOffset);
+	}
+
+	if (pDeviceDescriptor->SerialNumberOffset != 0)
+	{
+		// Finally, get the serial number
+		device->serialNumber = CString(pOutBuffer + pDeviceDescriptor->SerialNumberOffset);
+	}
+
+	// Do cleanup and return
+	delete[]pOutBuffer;
+	::CloseHandle(hDevice);
+	return dwRet;
+}
+
+Device *PopulateAvailableUSBDeviceList(bool adjustDeviceList)
+{
+	// Get available drives we can monitor
+	DWORD drives_bitmask = GetLogicalDrives();
+	int i = 1;
+	int deviceNumber = 1;
+
+	std::vector<const char *> keys;
+	Device *device;
+
+	while (drives_bitmask)
+	{
+		if (drives_bitmask & 1) {
+			TCHAR drive[] = { TEXT('A') + i, TEXT(':'), TEXT('\\'), TEXT('\0') };
+			if (GetDriveType(drive) == DRIVE_REMOVABLE)
+			{
+				device = new Device();
+				GetUSBDriveDetails(i, device);
+
+				const char *key = "";
+				key = device->vendorId.append(device->productId).append(device->serialNumber).c_str();
+
+				if (hasDevice(key))
+				{
+					keys.push_back(key);
+					std::cout << "Device " << device->vendorId << " (" << device->productId << ")" << " is already there in the list!" << std::endl;
+				}
+				else {
+					device->driveLetter = drive;
+					device->deviceNumber = deviceMap.size() + 1;
+					device->deviceStatus = (int)Connect;
+					AddDevice(key, device);
+					deviceNumber++;
+					std::cout << "Device " << device->driveLetter << " (" << device->productId << ")" << " is been added!" << std::endl;
+				}
+			}
+		}
+		drives_bitmask >>= 1;
+		i++;
+	}
+
+	if (adjustDeviceList)
+	{
+		Device *deviceToBeRemoved;
+		device = new Device();
+
+		std::map<std::string, Device*>::iterator it;
+		for (it = deviceMap.begin(); it != deviceMap.end(); ++it)
+		{
+			Device *item = it->second;
+			if (std::find(keys.begin(), keys.end(), CString(item->GetKey())) == keys.end())
+			{
+				deviceToBeRemoved = item;
+				break;
+			}
+		}
+
+		MapDeviceProps(device, deviceToBeRemoved);
+		RemoveDevice(deviceToBeRemoved);
+		device->deviceStatus = (int)Disconnect;
+
+		std::cout << "Device " << deviceToBeRemoved->driveLetter << " (" << deviceToBeRemoved->productId << ")" << " is been removed!" << std::endl;
+	}
+
+	return device;
+}
+
 LRESULT CALLBACK SpyCallback(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	if (msg == WM_DEVICECHANGE)
@@ -226,63 +516,16 @@ LRESULT CALLBACK SpyCallback(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			if (pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE)
 			{
 				pDevInf = (PDEV_BROADCAST_DEVICEINTERFACE)pHdr;
-				data_t d;
+				Device *device;
 
-				int len = 0;
+				Sleep(4000);
 
-				CString szDevId = pDevInf->dbcc_name + 4;
-				len = szDevId.GetLength();
-				int idx = szDevId.ReverseFind(_T('#'));
-				szDevId.Truncate(idx);
-				len = szDevId.GetLength() - 1;
-
-				CString serialNumber;
-				idx = szDevId.ReverseFind(_T('#'));
-				serialNumber = szDevId.Right(len - idx);
-				szDevId.Truncate(idx);
-				len = szDevId.GetLength() - 1;
-				d.serialNumber = serialNumber;
-
-				CString productId;
-				idx = szDevId.ReverseFind(_T('&'));
-				productId = szDevId.Right(len - idx);
-				int idx1 = productId.ReverseFind(_T('_'));
-				len = productId.GetLength() - 1;
-				productId = productId.Right(len - idx1);
-				szDevId.Truncate(idx);
-				len = szDevId.GetLength() - 1;
-				d.productId = productId;
-
-				CString vendorId;
-				idx = szDevId.ReverseFind(_T('#'));
-				vendorId = szDevId.Right(len - idx);
-				idx1 = vendorId.ReverseFind(_T('_'));
-				len = vendorId.GetLength() - 1;
-				vendorId = vendorId.Right(len - idx1);
-				d.vendorId = vendorId;
-
-				_sleep(3000);
-
-				// Get available drives we can monitor
-				DWORD drives_bitmask = GetLogicalDrives();
-				int i = 1;
-				int deviceNumber = 1;
-				while (drives_bitmask)
+				device = PopulateAvailableUSBDeviceList(DBT_DEVICEARRIVAL != wParam);
+				
+				if (ready)
 				{
-					if (drives_bitmask & 1) {
-						TCHAR drive[] = { TEXT('A') + i, TEXT(':'), TEXT('\\'), TEXT('\0') };
-						if (GetDriveType(drive) == DRIVE_REMOVABLE)
-						{
-							d.driveLetter = drive;
-							d.deviceNumber = deviceNumber;
-							deviceNumber++;
-						}
-					}
-					drives_bitmask >>= 1;
-					i++;
+					globalProgress->Send(device, 1);
 				}
-
-				globalProgress->Send(&d, 1);
 			}
 
 		}
