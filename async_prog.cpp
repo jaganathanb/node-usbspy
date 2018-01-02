@@ -204,7 +204,7 @@ public:
 
 		v8::Local<v8::Value> argv[] = { obj };
 
-#ifdef __TEST_MODE__
+#ifndef __TEST_MODE__
 		progress->Call(1, argv);
 #endif // __TEST_MODE__
 
