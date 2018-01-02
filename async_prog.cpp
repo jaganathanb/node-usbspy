@@ -453,10 +453,11 @@ Device *PopulateAvailableUSBDeviceList(bool adjustDeviceList)
 
 	std::vector<const char *> keys;
 	Device *device;
-
-	for(drive = 0; drive < 32; ++drive)
+	drive = 0;
+	while (drives_bitmask)
 	{
-		if (drives_bitmask & (1 << drive)) {
+		++drive;
+		if (drives_bitmask & 1) {
 			TCHAR driveLetter[] = { TEXT('A') + drive, TEXT(':'), TEXT('\\'), TEXT('\0') };
 			if (GetDriveType(driveLetter) == DRIVE_REMOVABLE)
 			{
@@ -481,6 +482,7 @@ Device *PopulateAvailableUSBDeviceList(bool adjustDeviceList)
 				}
 			}
 		}
+		drives_bitmask >>= 1;
 	}
 
 	if (adjustDeviceList)
