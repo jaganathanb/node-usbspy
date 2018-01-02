@@ -1,14 +1,15 @@
 var ap = require('./index');
 
-ap.on('progress', (data) => {    console.log(data);
+ap.on('change', (data) => {
+    console.log(data);
 });
 
-ap.on('data', (data) => {
+ap.on('end', (data) => {
     console.log(data);
 });
 
 ap.spyOn();
 
-setTimeout(() => {
-    ap.spyOff();
-}, 40000);
+// setTimeout(() => {
+//     ap.spyOff();
+// }, 40000);

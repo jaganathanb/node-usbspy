@@ -34,6 +34,8 @@ LRESULT CALLBACK SpyCallback(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 #define MAX_THREAD_WINDOW_NAME 64
 
+#define __TEST_MODE__ 1
+
 GUID GUID_DEVINTERFACE_USB_DEVICE = {
 	0xA5DCBF10L,
 	0x6530,
@@ -124,14 +126,12 @@ void MapDeviceProps(Device *destiDevice, Device *sourceDevice)
 	destiDevice->deviceStatus = sourceDevice->deviceStatus;
 	destiDevice->vendorId = sourceDevice->vendorId;
 	destiDevice->productId = sourceDevice->productId;
-	destiDevice->vendorId = sourceDevice->vendorId;
-	destiDevice->productId = sourceDevice->productId;
 	destiDevice->serialNumber = sourceDevice->serialNumber;
 	destiDevice->deviceNumber = sourceDevice->deviceNumber;
 	destiDevice->driveLetter = sourceDevice->driveLetter;
 }
 
-bool hasDevice(const char *key)
+bool HasDevice(const char *key)
 {
 	std::map<std::string, Device *>::iterator it;
 
@@ -180,11 +180,11 @@ public:
 		Nan::Set(
 			obj,
 			Nan::New("deviceNumber").ToLocalChecked(),
-			New<v8::Integer>(data->deviceNumber));
+			New<v8::Number>(data->deviceNumber));
 		Nan::Set(
 			obj,
 			Nan::New("deviceStatus").ToLocalChecked(),
-			New<v8::Integer>(data->deviceStatus));
+			New<v8::Number>(data->deviceStatus));
 		Nan::Set(
 			obj,
 			Nan::New("vendorId").ToLocalChecked(),
@@ -203,7 +203,11 @@ public:
 			New<v8::String>(data->driveLetter.c_str()).ToLocalChecked());
 
 		v8::Local<v8::Value> argv[] = { obj };
+
+#ifdef __TEST_MODE__
 		progress->Call(1, argv);
+#endif // __TEST_MODE__
+
 	}
 
 private:
@@ -212,13 +216,13 @@ private:
 
 NAN_METHOD(SpyOn)
 {
-	//#ifdef DEBUG
-	/*Callback *progress = new Callback();
-	Callback *callback = new Callback();*/
-	//#else 
+#ifdef __TEST_MODE__
+	Callback *progress = new Callback();
+	Callback *callback = new Callback();
+#else 
 	Callback *progress = new Callback(To<v8::Function>(info[0]).ToLocalChecked());
 	Callback *callback = new Callback(To<v8::Function>(info[1]).ToLocalChecked());
-	//#endif // DEBUG
+#endif // __TEST_MODE__
 
 	AsyncQueueWorker(new ProgressQueueWorker<Device>(callback, progress));
 }
@@ -232,7 +236,10 @@ void StartSpying()
 	}
 	cv.notify_one();
 
-	//New<v8::FunctionTemplate>(SpyOn)->GetFunction()->CallAsConstructor(0, {});
+#ifdef __TEST_MODE__
+	New<v8::FunctionTemplate>(SpyOn)->GetFunction()->CallAsConstructor(0, {});
+#endif // !__TEST_MODE__
+
 }
 
 NAN_METHOD(SpyOff)
@@ -258,8 +265,13 @@ void processData(const typename AsyncProgressQueueWorker<Device>::ExecutionProgr
 	PopulateAvailableUSBDeviceList(false);
 
 	std::thread worker(SpyingThread);
+
+#ifdef __TEST_MODE__
+	worker.join();
+#else
 	worker.detach();
-	//worker.join();
+#endif // __TEST_MODE__
+
 }
 
 DWORD WINAPI SpyingThread()
@@ -407,11 +419,6 @@ DWORD GetUSBDriveDetails(UINT nDriveNumber IN, Device *device OUT)
 	// followed by additional info like vendor ID, product ID, serial number, and so on.
 	STORAGE_DEVICE_DESCRIPTOR* pDeviceDescriptor = (STORAGE_DEVICE_DESCRIPTOR*)pOutBuffer;
 	const DWORD dwSerialNumberOffset = pDeviceDescriptor->SerialNumberOffset;
-	if (dwSerialNumberOffset != 0)
-	{
-		// Finally, get the serial number
-		device->productId = CString(pOutBuffer + pDeviceDescriptor->ProductIdOffset);
-	}
 
 	if (pDeviceDescriptor->ProductIdOffset != 0)
 	{
@@ -441,31 +448,31 @@ Device *PopulateAvailableUSBDeviceList(bool adjustDeviceList)
 {
 	// Get available drives we can monitor
 	DWORD drives_bitmask = GetLogicalDrives();
-	int i = 1;
+	DWORD drive;
 	int deviceNumber = 1;
 
 	std::vector<const char *> keys;
 	Device *device;
 
-	while (drives_bitmask)
+	for(drive = 0; drive < 32; ++drive)
 	{
-		if (drives_bitmask & 1) {
-			TCHAR drive[] = { TEXT('A') + i, TEXT(':'), TEXT('\\'), TEXT('\0') };
-			if (GetDriveType(drive) == DRIVE_REMOVABLE)
+		if (drives_bitmask & (1 << drive)) {
+			TCHAR driveLetter[] = { TEXT('A') + drive, TEXT(':'), TEXT('\\'), TEXT('\0') };
+			if (GetDriveType(driveLetter) == DRIVE_REMOVABLE)
 			{
 				device = new Device();
-				GetUSBDriveDetails(i, device);
+				GetUSBDriveDetails(drive, device);
 
 				const char *key = "";
 				key = device->vendorId.append(device->productId).append(device->serialNumber).c_str();
 
-				if (hasDevice(key))
+				if (HasDevice(key))
 				{
 					keys.push_back(key);
 					std::cout << "Device " << device->vendorId << " (" << device->productId << ")" << " is already there in the list!" << std::endl;
 				}
 				else {
-					device->driveLetter = drive;
+					device->driveLetter = driveLetter;
 					device->deviceNumber = deviceMap.size() + 1;
 					device->deviceStatus = (int)Connect;
 					AddDevice(key, device);
@@ -474,13 +481,11 @@ Device *PopulateAvailableUSBDeviceList(bool adjustDeviceList)
 				}
 			}
 		}
-		drives_bitmask >>= 1;
-		i++;
 	}
 
 	if (adjustDeviceList)
 	{
-		Device *deviceToBeRemoved;
+		Device *deviceToBeRemoved = new Device();
 		device = new Device();
 
 		std::map<std::string, Device*>::iterator it;
@@ -494,11 +499,16 @@ Device *PopulateAvailableUSBDeviceList(bool adjustDeviceList)
 			}
 		}
 
-		MapDeviceProps(device, deviceToBeRemoved);
-		RemoveDevice(deviceToBeRemoved);
-		device->deviceStatus = (int)Disconnect;
+		if (!deviceMap.empty())
+		{
+			MapDeviceProps(device, deviceToBeRemoved);
+			RemoveDevice(deviceToBeRemoved);
+			device->deviceStatus = (int)Disconnect;
 
-		std::cout << "Device " << deviceToBeRemoved->driveLetter << " (" << deviceToBeRemoved->productId << ")" << " is been removed!" << std::endl;
+			std::cout << "Device " << deviceToBeRemoved->driveLetter << " (" << deviceToBeRemoved->productId << ")" << " is been removed!" << std::endl;
+		}
+		delete deviceToBeRemoved;
+		deviceToBeRemoved = NULL;
 	}
 
 	return device;
@@ -521,10 +531,14 @@ LRESULT CALLBACK SpyCallback(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				Sleep(4000);
 
 				device = PopulateAvailableUSBDeviceList(DBT_DEVICEARRIVAL != wParam);
-				
+
 				if (ready)
 				{
+#ifndef __TEST_MODE__
 					globalProgress->Send(device, 1);
+#endif // !__TEST_MODE__
+
+
 				}
 			}
 

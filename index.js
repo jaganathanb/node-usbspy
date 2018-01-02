@@ -10,9 +10,9 @@ var asyncProgEE = new AsyncProg();
 
 asyncProgEE.spyOn = () => {
     ap.spyOn((data) => {
-        asyncProgEE.emit('progress', data);
+        asyncProgEE.emit('change', data);
     }, (data) => {
-        asyncProgEE.emit('data', data);
+        asyncProgEE.emit('end', data);
     });
 }
 
