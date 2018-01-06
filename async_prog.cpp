@@ -1,26 +1,3 @@
-/*********************************************************************
- * NAN - Native Abstractions for Node.js
- *
- * Copyright (c) 2017 NAN contributors
- *
- * MIT License <https://github.com/nodejs/nan/blob/master/LICENSE.md>
- ********************************************************************/
-
-#include <nan.h>
-#include <iostream>
-#include <string>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <dbt.h>
-#include <tchar.h>
-#include <atlstr.h>
-#include <map>
-#include <vector>
-#include <algorithm>
-
-#include <Setupapi.h>
-
 #include "cond_var.h"
 
 using namespace Nan; // NOLINT(build/namespaces)
@@ -28,9 +5,6 @@ using namespace Nan; // NOLINT(build/namespaces)
 std::mutex m;
 std::condition_variable cv;
 bool ready = false;
-
-DWORD WINAPI SpyingThread();
-LRESULT CALLBACK SpyCallback(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 #define MAX_THREAD_WINDOW_NAME 64
 
@@ -49,49 +23,7 @@ GUID GUID_DEVINTERFACE_USB_DEVICE = {
 	0x51,
 	0xED };
 
-typedef struct Device_t {
-	int deviceNumber;
-	int deviceStatus;
-	std::string serialNumber;
-	std::string productId;
-	std::string vendorId;
-	std::string driveLetter;
-
-	Device_t() {
-		key = NULL;
-	}
-
-	~Device_t() {
-		if (this->key != NULL) {
-			delete this->key;
-		}
-	}
-
-	void SetKey(const char* key) {
-		if (this->key != NULL) {
-			delete this->key;
-		}
-		this->key = new char[strlen(key) + 1];
-		memcpy(this->key, key, strlen(key) + 1);
-	}
-
-	char* GetKey() {
-		return this->key;
-	}
-
-private:
-	char* key;
-
-} Device;
-
-typedef enum  DeviceStatus_t {
-	Disconnect = 0,
-	Connect
-} DeviceStatus;
-
 const typename AsyncProgressQueueWorker<Device>::ExecutionProgress *globalProgress;
-
-Device *PopulateAvailableUSBDeviceList(bool adjustDeviceList);
 
 std::map<std::string, Device*> deviceMap;
 
@@ -326,41 +258,6 @@ DWORD WINAPI SpyingThread()
 	}
 
 	return 0;
-}
-
-void ExtractDeviceInfo(CString name, Device *device) {
-	int len = 0;
-
-	CString szDevId = name;
-	len = szDevId.GetLength();
-	int idx = szDevId.ReverseFind(_T('#'));
-	szDevId.Truncate(idx);
-	len = szDevId.GetLength() - 1;
-
-	CString serialNumber;
-	idx = szDevId.ReverseFind(_T('#'));
-	serialNumber = szDevId.Right(len - idx);
-	szDevId.Truncate(idx);
-	len = szDevId.GetLength() - 1;
-	device->serialNumber = serialNumber;
-
-	CString productId;
-	idx = szDevId.ReverseFind(_T('&'));
-	productId = szDevId.Right(len - idx);
-	int idx1 = productId.ReverseFind(_T('_'));
-	len = productId.GetLength() - 1;
-	productId = productId.Right(len - idx1);
-	szDevId.Truncate(idx);
-	len = szDevId.GetLength() - 1;
-	device->productId = productId;
-
-	CString vendorId;
-	idx = szDevId.ReverseFind(_T('#'));
-	vendorId = szDevId.Right(len - idx);
-	idx1 = vendorId.ReverseFind(_T('_'));
-	len = vendorId.GetLength() - 1;
-	vendorId = vendorId.Right(len - idx1);
-	device->vendorId = vendorId;
 }
 
 DWORD GetUSBDriveDetails(UINT nDriveNumber IN, Device *device OUT)
