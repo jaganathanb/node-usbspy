@@ -1,9 +1,14 @@
 #ifndef _USBSPY_H
 #define _USBSPY_H
 
-#include <nan.h>
+#include <mutex>
+#include <iostream>
+#include <atlstr.h>
+#include <comdef.h>
 #include <map>
 #include <Dbt.h>
+
+#include <nan.h>
 
 #ifndef UNICODE
 typedef std::string String;

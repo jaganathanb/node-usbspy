@@ -1,9 +1,4 @@
-#include <iostream>
-#include <atlstr.h>
-#include <mutex>
-
 #include "usbs.h"
-#include "usbspy.h"
 
 using Nan::AsyncProgressQueueWorker;
 using Nan::AsyncQueueWorker;

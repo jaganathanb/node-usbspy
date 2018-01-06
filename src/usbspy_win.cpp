@@ -1,15 +1,11 @@
-#include <iostream>
-#include <atlstr.h>
-#include <comdef.h>
-#include <map>
-
 #include "usbs.h"
-#include "usbspy.h"
 
 Device *PopulateAvailableUSBDeviceList(bool adjustDeviceList)
 {
 	DWORD drives_bitmask = GetLogicalDrives();
 	DWORD drive;
+
+	TCHAR driveLetter[260];
 
 	std::vector<const char *> keys;
 	Device *device;
@@ -18,14 +14,13 @@ Device *PopulateAvailableUSBDeviceList(bool adjustDeviceList)
 	{
 		if (drives_bitmask & (1 << drive))
 		{
-			TCHAR driveLetter[] = { TEXT('A') + drive, TEXT(':'), TEXT('\\'), TEXT('\0') };
+			_stprintf(driveLetter, _T("%c:\\"), 'A' + drive);
 			if (GetDriveType(driveLetter) == DRIVE_REMOVABLE)
 			{
-				device = new Device();
 				GetUSBDriveDetails(drive, device);
 
 				const char *key = "";
-				_bstr_t b(device->vendorId.append(device->productId).append(device->serialNumber).c_str());
+     			_bstr_t b(device->vendorId.append(device->productId).append(device->serialNumber).c_str());
 				key = b;
 
 				if (HasDevice(key))

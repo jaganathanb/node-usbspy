@@ -1,6 +1,4 @@
-#include <map>
-#include <atlstr.h>
-#include "usbspy.h"
+#include "usbs.h"
 
 std::map<std::string, Device *> deviceMap;
 
