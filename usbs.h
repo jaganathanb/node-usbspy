@@ -1,6 +1,8 @@
 #ifndef USBS_H
 #define USBS_H
 
+#include <map>
+#include <vector>
 #include <string>
 
 typedef struct Device_t {
@@ -49,5 +51,6 @@ void MapDeviceProps(Device *destiDevice, Device *sourceDevice);
 Device *GetDevice(const char *key);
 void RemoveDevice(Device *item);
 void AddDevice(const char *key, Device *item);
+Device *GetDeviceToBeRemoved(std::vector<const char *> keys);
 
 #endif

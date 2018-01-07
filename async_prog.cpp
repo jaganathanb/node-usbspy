@@ -1,3 +1,12 @@
+#include <nan.h>
+#include <iostream>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <dbt.h>
+#include <tchar.h>
+#include <algorithm>
+
 #include "usbs.h"
 #include "cond_var.h"
 
@@ -26,61 +35,6 @@ GUID GUID_DEVINTERFACE_USB_DEVICE = {
 
 
 const typename AsyncProgressQueueWorker<Device>::ExecutionProgress *globalProgress;
-
-std::map<std::string, Device*> deviceMap;
-
-void AddDevice(const char *key, Device *item)
-{
-	item->SetKey(key);
-	deviceMap.insert(std::pair<std::string, Device *>(item->GetKey(), item));
-}
-
-void RemoveDevice(Device *item)
-{
-	deviceMap.erase(item->GetKey());
-}
-
-Device *GetDevice(const char *key)
-{
-	std::map<std::string, Device *>::iterator it;
-
-	it = deviceMap.find(key);
-	if (it == deviceMap.end())
-	{
-		return NULL;
-	}
-	else
-	{
-		return it->second;
-	}
-}
-
-void MapDeviceProps(Device *destiDevice, Device *sourceDevice)
-{
-	destiDevice->deviceStatus = sourceDevice->deviceStatus;
-	destiDevice->vendorId = sourceDevice->vendorId;
-	destiDevice->productId = sourceDevice->productId;
-	destiDevice->serialNumber = sourceDevice->serialNumber;
-	destiDevice->deviceNumber = sourceDevice->deviceNumber;
-	destiDevice->driveLetter = sourceDevice->driveLetter;
-}
-
-bool HasDevice(const char *key)
-{
-	std::map<std::string, Device *>::iterator it;
-
-	it = deviceMap.find(key);
-	if (it == deviceMap.end())
-	{
-		return false;
-	}
-	else
-	{
-		return true;
-	}
-
-	return true;
-}
 
 template<typename T>
 class ProgressQueueWorker : public AsyncProgressQueueWorker<T> {
@@ -267,12 +221,14 @@ DWORD GetUSBDriveDetails(UINT nDriveNumber IN, Device *device OUT)
 	DWORD dwRet = NO_ERROR;
 
 	// Format physical drive path (may be '\\.\PhysicalDrive0', '\\.\PhysicalDrive1' and so on).
-	CString strDrivePath;
+	TCHAR szDrvName[260];
 	//sprintf(szBuf, "\\\\?\\%c:", 'A' + drive);
-	strDrivePath.Format(_T("\\\\.\\%c:"), 'A' + nDriveNumber);
+	//strDrivePath.Format(_T("\\\\.\\%c:"), 'A' + nDriveNumber);
+
+	_stprintf(szDrvName, _T("\\\\.\\%c:"), 'A' + nDriveNumber);
 
 	// Get a handle to physical drive
-	HANDLE hDevice = ::CreateFile(strDrivePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
+	HANDLE hDevice = ::CreateFile(szDrvName, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
 		NULL, OPEN_EXISTING, 0, NULL);
 
 	if (INVALID_HANDLE_VALUE == hDevice)
@@ -319,22 +275,31 @@ DWORD GetUSBDriveDetails(UINT nDriveNumber IN, Device *device OUT)
 	STORAGE_DEVICE_DESCRIPTOR* pDeviceDescriptor = (STORAGE_DEVICE_DESCRIPTOR*)pOutBuffer;
 	const DWORD dwSerialNumberOffset = pDeviceDescriptor->SerialNumberOffset;
 
+	char value[260] = "";
+
 	if (pDeviceDescriptor->ProductIdOffset != 0)
 	{
 		// Finally, get the serial number
-		device->productId = CString(pOutBuffer + pDeviceDescriptor->ProductIdOffset);
+		//device->productId = CString(pOutBuffer + pDeviceDescriptor->ProductIdOffset);
+
+		sprintf(value, "%s", pOutBuffer + pDeviceDescriptor->ProductIdOffset);
+		device->productId = std::string(value);
 	}
 
 	if (pDeviceDescriptor->VendorIdOffset != 0)
 	{
 		// Finally, get the serial number
-		device->vendorId = CString(pOutBuffer + pDeviceDescriptor->VendorIdOffset);
+		//device->vendorId = CString(pOutBuffer + pDeviceDescriptor->VendorIdOffset);
+		sprintf(value, "%s", pOutBuffer + pDeviceDescriptor->VendorIdOffset);
+		device->vendorId = std::string(value);
 	}
 
 	if (pDeviceDescriptor->SerialNumberOffset != 0)
 	{
 		// Finally, get the serial number
-		device->serialNumber = CString(pOutBuffer + pDeviceDescriptor->SerialNumberOffset);
+		//device->serialNumber = CString(pOutBuffer + pDeviceDescriptor->SerialNumberOffset);
+		sprintf(value, "%s", pOutBuffer + pDeviceDescriptor->SerialNumberOffset);
+		device->serialNumber = std::string(value);
 	}
 
 	// Do cleanup and return
@@ -372,10 +337,8 @@ Device *PopulateAvailableUSBDeviceList(bool adjustDeviceList)
 				}
 				else {
 					device->driveLetter = driveLetter;
-					device->deviceNumber = deviceMap.size() + 1;
 					device->deviceStatus = (int)Connect;
 					AddDevice(key, device);
-					deviceNumber++;
 					std::cout << "Device " << device->driveLetter << " (" << device->productId << ")" << " is been added!" << std::endl;
 				}
 			}
@@ -387,18 +350,9 @@ Device *PopulateAvailableUSBDeviceList(bool adjustDeviceList)
 		Device *deviceToBeRemoved = new Device();
 		device = new Device();
 
-		std::map<std::string, Device*>::iterator it;
-		for (it = deviceMap.begin(); it != deviceMap.end(); ++it)
-		{
-			Device *item = it->second;
-			if (std::find(keys.begin(), keys.end(), CString(item->GetKey())) == keys.end())
-			{
-				deviceToBeRemoved = item;
-				break;
-			}
-		}
+		deviceToBeRemoved = GetDeviceToBeRemoved(keys);
 
-		if (!deviceMap.empty())
+		if (deviceToBeRemoved)
 		{
 			MapDeviceProps(device, deviceToBeRemoved);
 			RemoveDevice(deviceToBeRemoved);

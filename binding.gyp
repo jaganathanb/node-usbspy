@@ -5,6 +5,7 @@
       "sources": [
         "usbs.h",
         "cond_var.h",
+        "usbs.cpp",
         "async_prog.cpp"
       ],
       "include_dirs" : [
