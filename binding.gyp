@@ -1,12 +1,12 @@
 {
   "targets": [
     {
-      "target_name": "asyncprog",
+      "target_name": "usbspy",
       "sources": [
-        "usbs.h",
-        "cond_var.h",
-        "usbs.cpp",
-        "async_prog.cpp"
+        "src/usbs.h",
+        "src/usbspy.h",
+        "src/usbs.cpp",
+        "src/usbspy.cpp"
       ],
       "include_dirs" : [
         "<!(node -e \"require('nan')\")"

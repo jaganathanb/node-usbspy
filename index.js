@@ -1,4 +1,4 @@
-var ap = require('bindings')('asyncprog.node');
+var ap = require('bindings')('usbspy.node');
 var EventEmitter = require('events');
 
 class AsyncProg extends EventEmitter {
