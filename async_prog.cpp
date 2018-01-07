@@ -1,3 +1,4 @@
+#include "usbs.h"
 #include "cond_var.h"
 
 using namespace Nan; // NOLINT(build/namespaces)
@@ -22,6 +23,7 @@ GUID GUID_DEVINTERFACE_USB_DEVICE = {
 	0xB9,
 	0x51,
 	0xED };
+
 
 const typename AsyncProgressQueueWorker<Device>::ExecutionProgress *globalProgress;
 
