@@ -15,11 +15,13 @@
 
 #define MAX_THREAD_WINDOW_NAME 64
 
+//#define _TEST_NODE_
+
 DWORD WINAPI SpyingThread();
 LRESULT CALLBACK SpyCallback(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-Device *PopulateAvailableUSBDeviceList(bool adjustDeviceList);
-DWORD GetUSBDriveDetails(UINT nDriveNumber IN, Device *device OUT);
+void PopulateAvailableUSBDeviceList();
+DWORD GetUSBDriveDetails(UINT drive_number IN, Device *device OUT);
 
 void StartSpying();
 

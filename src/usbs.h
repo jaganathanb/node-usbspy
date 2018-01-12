@@ -2,55 +2,43 @@
 #define USBS_H
 
 #include <map>
-#include <vector>
+#include <list>
 #include <string>
 
 typedef struct Device_t {
-	int deviceNumber;
-	int deviceStatus;
-	std::string serialNumber;
-	std::string productId;
-	std::string vendorId;
-	std::string driveLetter;
+	int device_number;
+	int device_status;
+	std::string serial_number;
+	std::string product_id;
+	std::string vendor_id;
+	std::string drive_letter;
 
-	Device_t() {
-		key = NULL;
+	void SetKey(std::string key)
+	{
+		_key = key;
 	}
 
-	~Device_t() {
-		if (this->key != NULL) {
-			delete this->key;
-		}
-	}
-
-	void SetKey(const char* key) {
-		if (this->key != NULL) {
-			delete this->key;
-		}
-		this->key = new char[strlen(key) + 1];
-		memcpy(this->key, key, strlen(key) + 1);
-	}
-
-	char* GetKey() {
-		return this->key;
+	std::string GetKey() {
+		return _key;
 	}
 
 private:
-	char* key;
-
+	std::string _key;
 } Device;
 
-typedef enum  DeviceStatus_t {
+typedef enum  device_status_t {
 	Disconnect = 0,
 	Connect
-} DeviceStatus;
+} device_status;
 
 
-bool HasDevice(const char *key);
+bool HasDevice(std::string key);
 void MapDeviceProps(Device *destiDevice, Device *sourceDevice);
-Device *GetDevice(const char *key);
+Device *GetDevice(std::string key);
 void RemoveDevice(Device *item);
-void AddDevice(const char *key, Device *item);
-Device *GetDeviceToBeRemoved(std::vector<const char *> keys);
+void AddDevice(Device *item);
+Device *GetDeviceToBeRemoved(std::list<std::string> keys);
+Device *GetUSBDeviceByLetter(std::string device_letter);
+std::list<Device *> GetUSBDevices();
 
 #endif

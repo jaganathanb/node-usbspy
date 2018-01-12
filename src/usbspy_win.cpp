@@ -13,23 +13,28 @@ GUID GUID_DEVINTERFACE_USB_DEVICE = {
 	0x4F,
 	0xB9,
 	0x51,
-	0xED 
-};
+	0xED };
 
 const typename AsyncProgressQueueWorker<Device>::ExecutionProgress *globalProgress;
 
-void processData(const typename AsyncProgressQueueWorker<Device>::ExecutionProgress& progress) {
+void processData(const typename AsyncProgressQueueWorker<Device>::ExecutionProgress &progress)
+{
 	globalProgress = &progress;
 
-	PopulateAvailableUSBDeviceList(false);
+	PopulateAvailableUSBDeviceList();
+
+	Device device;
+	device.drive_letter = "All";
+
+	globalProgress->Send(&device, 1);
 
 	std::thread worker(SpyingThread);
 
-#ifndef __TEST_MODE__
+#ifdef _DEBUG
 	worker.join();
 #else
 	worker.detach();
-#endif // __TEST_MODE__
+#endif
 }
 
 DWORD WINAPI SpyingThread()
@@ -69,7 +74,8 @@ DWORD WINAPI SpyingThread()
 		printf("RegisterDeviceNotificationA() failed [Error: %x]\r\n", le);
 		return 1;
 	}
-	std::cout << "before gets message \n" << std::endl;
+	std::cout << "before gets message \n"
+		<< std::endl;
 	MSG msg;
 	while (TRUE)
 	{
@@ -86,143 +92,191 @@ DWORD WINAPI SpyingThread()
 	return 0;
 }
 
-DWORD GetUSBDriveDetails(UINT nDriveNumber IN, Device *device OUT)
+DWORD GetUSBDriveDetails(UINT drive_number IN, Device *device OUT)
 {
-	DWORD dwRet = NO_ERROR;
+	DWORD return_value = NO_ERROR;
 
 	// Format physical drive path (may be '\\.\PhysicalDrive0', '\\.\PhysicalDrive1' and so on).
-	TCHAR szDrvName[260];
+	TCHAR drive_letter[260];
 	//sprintf(szBuf, "\\\\?\\%c:", 'A' + drive);
-	//strDrivePath.Format(_T("\\\\.\\%c:"), 'A' + nDriveNumber);
+	//strDrivePath.Format(_T("\\\\.\\%c:"), 'A' + drive_number);
 
-	_stprintf(szDrvName, _T("\\\\.\\%c:"), 'A' + nDriveNumber);
+	_stprintf(drive_letter, _T("\\\\.\\%c:"), 'A' + drive_number);
 
 	// Get a handle to physical drive
-	HANDLE hDevice = ::CreateFile(szDrvName, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
+	HANDLE drive_handle = ::CreateFile(drive_letter, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
 		NULL, OPEN_EXISTING, 0, NULL);
 
-	if (INVALID_HANDLE_VALUE == hDevice)
+	if (INVALID_HANDLE_VALUE == drive_handle)
 		return ::GetLastError();
 
 	// Set the input data structure
-	STORAGE_PROPERTY_QUERY storagePropertyQuery;
-	ZeroMemory(&storagePropertyQuery, sizeof(STORAGE_PROPERTY_QUERY));
-	storagePropertyQuery.PropertyId = StorageDeviceProperty;
-	storagePropertyQuery.QueryType = PropertyStandardQuery;
+	STORAGE_PROPERTY_QUERY query;
+	ZeroMemory(&query, sizeof(STORAGE_PROPERTY_QUERY));
+	query.PropertyId = StorageDeviceProperty;
+	query.QueryType = PropertyStandardQuery;
 
 	// Get the necessary output buffer size
-	STORAGE_DESCRIPTOR_HEADER storageDescriptorHeader = { 0 };
-	DWORD dwBytesReturned = 0;
-	if (!::DeviceIoControl(hDevice, IOCTL_STORAGE_QUERY_PROPERTY,
-		&storagePropertyQuery, sizeof(STORAGE_PROPERTY_QUERY),
-		&storageDescriptorHeader, sizeof(STORAGE_DESCRIPTOR_HEADER),
-		&dwBytesReturned, NULL))
+	STORAGE_DESCRIPTOR_HEADER header = { 0 };
+	DWORD bytes_returned = 0;
+	if (!::DeviceIoControl(drive_handle, IOCTL_STORAGE_QUERY_PROPERTY,
+		&query, sizeof(STORAGE_PROPERTY_QUERY),
+		&header, sizeof(STORAGE_DESCRIPTOR_HEADER),
+		&bytes_returned, NULL))
 	{
-		dwRet = ::GetLastError();
-		::CloseHandle(hDevice);
-		return dwRet;
+		return_value = ::GetLastError();
+		::CloseHandle(drive_handle);
+		return return_value;
 	}
 
 	// Alloc the output buffer
-	const DWORD dwOutBufferSize = storageDescriptorHeader.Size;
-	BYTE* pOutBuffer = new BYTE[dwOutBufferSize];
-	ZeroMemory(pOutBuffer, dwOutBufferSize);
+	const DWORD buffer_size = header.Size;
+	BYTE *buffer = new BYTE[buffer_size];
+	ZeroMemory(buffer, buffer_size);
 
 	// Get the storage device descriptor
-	if (!::DeviceIoControl(hDevice, IOCTL_STORAGE_QUERY_PROPERTY,
-		&storagePropertyQuery, sizeof(STORAGE_PROPERTY_QUERY),
-		pOutBuffer, dwOutBufferSize,
-		&dwBytesReturned, NULL))
+	if (!::DeviceIoControl(drive_handle, IOCTL_STORAGE_QUERY_PROPERTY,
+		&query, sizeof(STORAGE_PROPERTY_QUERY),
+		buffer, buffer_size,
+		&bytes_returned, NULL))
 	{
-		dwRet = ::GetLastError();
-		delete[]pOutBuffer;
-		::CloseHandle(hDevice);
-		return dwRet;
+		return_value = ::GetLastError();
+		delete[] buffer;
+		::CloseHandle(drive_handle);
+		return return_value;
 	}
 
 	// Now, the output buffer points to a STORAGE_DEVICE_DESCRIPTOR structure
 	// followed by additional info like vendor ID, product ID, serial number, and so on.
-	STORAGE_DEVICE_DESCRIPTOR* pDeviceDescriptor = (STORAGE_DEVICE_DESCRIPTOR*)pOutBuffer;
-	const DWORD dwSerialNumberOffset = pDeviceDescriptor->SerialNumberOffset;
+	STORAGE_DEVICE_DESCRIPTOR *device_desc = (STORAGE_DEVICE_DESCRIPTOR *)buffer;
 
 	char value[260] = "";
 
-	if (pDeviceDescriptor->ProductIdOffset != 0)
+	if (device_desc->ProductIdOffset != 0)
 	{
 		// Finally, get the serial number
-		//device->productId = CString(pOutBuffer + pDeviceDescriptor->ProductIdOffset);
-
-		sprintf(value, "%s", pOutBuffer + pDeviceDescriptor->ProductIdOffset);
-		device->productId = std::string(value);
+		//device->product_id = CString(buffer + device_desc->ProductIdOffset);
+		value[0] = '\0';
+		sprintf(value, "%s", buffer + device_desc->ProductIdOffset);
+		device->product_id = std::string(value);
 	}
 
-	if (pDeviceDescriptor->VendorIdOffset != 0)
+	if (device_desc->VendorIdOffset != 0)
 	{
 		// Finally, get the serial number
-		//device->vendorId = CString(pOutBuffer + pDeviceDescriptor->VendorIdOffset);
-		sprintf(value, "%s", pOutBuffer + pDeviceDescriptor->VendorIdOffset);
-		device->vendorId = std::string(value);
+		//device->vendor_id = CString(buffer + device_desc->VendorIdOffset);
+		value[0] = '\0';
+		sprintf(value, "%s", buffer + device_desc->VendorIdOffset);
+		device->vendor_id = std::string(value);
 	}
 
-	if (pDeviceDescriptor->SerialNumberOffset != 0)
+	if (device_desc->SerialNumberOffset != 0)
 	{
 		// Finally, get the serial number
-		//device->serialNumber = CString(pOutBuffer + pDeviceDescriptor->SerialNumberOffset);
-		sprintf(value, "%s", pOutBuffer + pDeviceDescriptor->SerialNumberOffset);
-		device->serialNumber = std::string(value);
+		//device->serial_number = CString(buffer + device_desc->serial_numberOffset);
+		value[0] = '\0';
+		sprintf(value, "%s", buffer + device_desc->SerialNumberOffset);
+		device->serial_number = std::string(value);
 	}
 
 	STORAGE_DEVICE_NUMBER sdn;
-	if (!DeviceIoControl(hDevice,
-		IOCTL_STORAGE_GET_DEVICE_NUMBER, &storagePropertyQuery, sizeof(STORAGE_PROPERTY_QUERY),
+	if (!DeviceIoControl(drive_handle,
+		IOCTL_STORAGE_GET_DEVICE_NUMBER, &query, sizeof(STORAGE_PROPERTY_QUERY),
 		&sdn, sizeof(sdn),
-		&dwBytesReturned, NULL))
+		&bytes_returned, NULL))
 	{
-		dwRet = ::GetLastError();
-		delete[] pOutBuffer;
-		::CloseHandle(hDevice);
-		return dwRet;
+		return_value = ::GetLastError();
+		delete[] buffer;
+		::CloseHandle(drive_handle);
+		return return_value;
 	}
 
-	device->deviceNumber = (int)sdn.DeviceNumber;
+	device->device_number = (int)sdn.DeviceNumber;
 
 	// Do cleanup and return
-	delete[]pOutBuffer;
-	::CloseHandle(hDevice);
-	return dwRet;
+	delete[] buffer;
+	::CloseHandle(drive_handle);
+	return return_value;
 }
 
-Device *PopulateAvailableUSBDeviceList(bool adjustDeviceList)
+void PopulateAvailableUSBDeviceList()
 {
 	// Get available drives we can monitor
 	DWORD drives_bitmask = GetLogicalDrives();
 	DWORD drive;
+	TCHAR drive_letter[33];
 
-	std::vector<const char *> keys;
-	Device *device;
+	std::list<std::string>
+		keys;
 
-	for(drive = 0; drive < 32; ++drive)
+	Device *device = NULL;
+
+	for (drive = 0; drive < 32; ++drive)
 	{
-		if (drives_bitmask & (1 << drive)) {
-			TCHAR driveLetter[] = { TEXT('A') + drive, TEXT(':'), TEXT('\\'), TEXT('\0') };
-			if (GetDriveType(driveLetter) == DRIVE_REMOVABLE)
+		if (drives_bitmask & (1 << drive))
+		{
+			_stprintf(drive_letter, _T("%c:\\"), 'A' + drive);
+			if (GetDriveType(drive_letter) == DRIVE_REMOVABLE)
 			{
-				device = new Device();
+				device = new Device;
 				GetUSBDriveDetails(drive, device);
 
-				const char *key = "";
-				key = device->vendorId.append(device->productId).append(device->serialNumber).c_str();
+				std::string key = "";
+				key = key.append(device->vendor_id).append(device->product_id).append(device->serial_number);
 
-				if (HasDevice(key))
+				device->SetKey(key);
+				device->drive_letter = drive_letter;
+				device->device_status = (int)Connect;
+				AddDevice(device);
+				std::cout << "Device " << device->drive_letter << " (" << device->product_id << ")"
+					<< " is been added!" << std::endl;
+			}
+		}
+	}
+}
+
+Device *GetUSBDeviceDetails(bool adjustDeviceList)
+{
+	// Get available drives we can monitor
+	DWORD drives_bitmask = GetLogicalDrives();
+	DWORD drive;
+	TCHAR drive_letter[33];
+
+	std::list<std::string>
+		keys;
+	Device *device = NULL;
+
+	for (drive = 0; drive < 32; ++drive)
+	{
+		if (drives_bitmask & (1 << drive))
+		{
+			_stprintf(drive_letter, _T("%c:\\"), 'A' + drive);
+			device = GetUSBDeviceByLetter(drive_letter);
+
+			if (GetDriveType(drive_letter) == DRIVE_REMOVABLE)
+			{
+				if (device && device->drive_letter == drive_letter)
 				{
-					keys.push_back(key);
-					std::cout << "Device " << device->vendorId << " (" << device->productId << ")" << " is already there in the list!" << std::endl;
+					keys.push_back(device->GetKey());
+					std::cout << "Device " << device->vendor_id << " (" << device->product_id << ")"
+						<< " is already there in the list!" << std::endl;
+					delete device; // check wether it is needed or not
+					device = NULL;
 				}
-				else {
-					device->driveLetter = driveLetter;
-					device->deviceStatus = (int)Connect;
-					AddDevice(key, device);
-					std::cout << "Device " << device->driveLetter << " (" << device->productId << ")" << " is been added!" << std::endl;
+				else
+				{
+					device = new Device;
+					GetUSBDriveDetails(drive, device);
+
+					std::string key = "";
+					key = key.append(device->vendor_id).append(device->product_id).append(device->serial_number);
+
+					device->SetKey(key);
+					device->drive_letter = drive_letter;
+					device->device_status = (int)Connect;
+					AddDevice(device);
+					std::cout << "Device " << device->drive_letter << " (" << device->product_id << ")"
+						<< " is been added!" << std::endl;
 				}
 			}
 		}
@@ -230,21 +284,21 @@ Device *PopulateAvailableUSBDeviceList(bool adjustDeviceList)
 
 	if (adjustDeviceList)
 	{
-		Device *deviceToBeRemoved = new Device();
-		device = new Device();
+		Device *deviceToBeRemoved = NULL;
 
 		deviceToBeRemoved = GetDeviceToBeRemoved(keys);
 
 		if (deviceToBeRemoved)
 		{
+			device = new Device;
 			MapDeviceProps(device, deviceToBeRemoved);
 			RemoveDevice(deviceToBeRemoved);
-			device->deviceStatus = (int)Disconnect;
+			delete deviceToBeRemoved;
+			device->device_status = (int)Disconnect;
 
-			std::cout << "Device " << deviceToBeRemoved->driveLetter << " (" << deviceToBeRemoved->productId << ")" << " is been removed!" << std::endl;
+			std::cout << "Device " << device->drive_letter << " (" << device->product_id << ")"
+				<< " is been removed!" << std::endl;
 		}
-		delete deviceToBeRemoved;
-		deviceToBeRemoved = NULL;
 	}
 
 	return device;
@@ -262,17 +316,18 @@ LRESULT CALLBACK SpyCallback(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			if (pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE)
 			{
 				pDevInf = (PDEV_BROADCAST_DEVICEINTERFACE)pHdr;
-				Device *device;
+				Device *device = NULL;
 
 				std::this_thread::sleep_for(std::chrono::seconds(3));
 
-				device = PopulateAvailableUSBDeviceList(DBT_DEVICEARRIVAL != wParam);
+				device = GetUSBDeviceDetails(DBT_DEVICEARRIVAL != wParam);
 
-#ifndef __TEST_MODE__
-					globalProgress->Send(device, 1);
-#endif // !__TEST_MODE__
+				globalProgress->Send(device, 1);
+
+				if (DBT_DEVICEARRIVAL != wParam && device) {
+					delete device;
+				}
 			}
-
 		}
 	}
 
