@@ -86,7 +86,6 @@ std::list<Device *> GetUSBDevices() {
 	return deviceList;
 }
 
-
 Device *GetUSBDeviceByLetter(std::string device_letter) {
 	Device *device = NULL;
 	std::map<std::string, Device*>::iterator it;
@@ -102,4 +101,14 @@ Device *GetUSBDeviceByLetter(std::string device_letter) {
 		}
 	}
 	return device;
+}
+
+void ClearUSBDeviceList() {
+	Device *device;
+	std::map<std::string, Device*>::iterator it;
+	for (it = deviceMap.begin(); it != deviceMap.end(); ++it)
+	{
+		deviceMap.erase(it->first);
+		delete it->second;
+	}
 }

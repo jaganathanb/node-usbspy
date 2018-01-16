@@ -22,12 +22,7 @@ void processData(const typename AsyncProgressQueueWorker<Device>::ExecutionProgr
 	globalProgress = &progress;
 
 	PopulateAvailableUSBDeviceList();
-
-	Device device;
-	device.drive_letter = "All";
-
-	globalProgress->Send(&device, 1);
-
+	
 	std::thread worker(SpyingThread);
 
 #ifdef _DEBUG

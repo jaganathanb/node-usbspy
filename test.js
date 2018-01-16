@@ -10,6 +10,10 @@ ap.on('end', (data) => {
 
 ap.spyOn();
 
+console.log(ap.getAvailableUSBDevices());
+
+console.log(ap.getUSBDeviceByDeviceLetter('F:\\'));
+
 // setTimeout(() => {
 //     ap.spyOff();
 // }, 40000);

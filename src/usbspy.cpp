@@ -1,12 +1,13 @@
 #include "usbspy.h"
 
-using namespace Nan; // NOLINT(build/namespaces)
+using namespace Nan;
 
 std::mutex m;
 std::condition_variable cv;
 bool ready = false;
 
 void processData(const typename AsyncProgressQueueWorker<Device>::ExecutionProgress& progress);
+v8::Local<v8::Value> Preparev8Object(const Device * data);
 
 template<typename T>
 class ProgressQueueWorker : public AsyncProgressQueueWorker<T> {
@@ -30,114 +31,15 @@ public:
 
 		lk.unlock();
 		cv.notify_one();
+		ClearUSBDeviceList();
 	}
 
 	void HandleProgressCallback(const T *data, size_t count) {
 		HandleScope scope;
 
 		if (data != NULL) {
-			v8::Local<v8::Array> device_list;
-
-			if (data->drive_letter == "All") {
-				std::list<Device *> dvlst = GetUSBDevices();
-				std::list<Device*>::iterator it;
-
-				v8::Local<v8::Array> device_list = New<v8::Array>(dvlst.size());
-				
-				int i = 0;
-				for (it = dvlst.begin(); it != dvlst.end(); ++it)
-				{
-					v8::Local<v8::Object> obj = Nan::New<v8::Object>();
-
-					Nan::Set(
-					obj,
-					Nan::New("device_number").ToLocalChecked(),
-					New<v8::Number>(it->device_number));
-
-					Nan::Set(
-					obj,
-					Nan::New("device_status").ToLocalChecked(),
-					New<v8::Number>(it->device_status));
-					Nan::Set(
-					obj,
-					Nan::New("vendor_id").ToLocalChecked(),
-					New<v8::String>(it->vendor_id.c_str()).ToLocalChecked());
-					Nan::Set(
-					obj,
-					Nan::New("serial_number").ToLocalChecked(),
-					New<v8::String>(it->serial_number.c_str()).ToLocalChecked());
-					Nan::Set(
-					obj,
-					Nan::New("product_id").ToLocalChecked(),
-					New<v8::String>(it->product_id.c_str()).ToLocalChecked());
-					Nan::Set(
-					obj,
-					Nan::New("drive_letter").ToLocalChecked(),
-					New<v8::String>(it->drive_letter.c_str()).ToLocalChecked());
-
-					Nan::Set(device_list, i, obj);
-					i++;
-				}
-			}
-			else {
-
-				v8::Local<v8::Array> device_list = New<v8::Array>(1);
-				v8::Local<v8::Object> obj = Nan::New<v8::Object>();
-
-				Nan::Set(
-					obj,
-					Nan::New("device_number").ToLocalChecked(),
-					New<v8::Number>(it->device_number));
-				Nan::Set(
-					obj,
-					Nan::New("device_status").ToLocalChecked(),
-					New<v8::Number>(it->device_status));
-				Nan::Set(
-					obj,
-					Nan::New("vendor_id").ToLocalChecked(),
-					New<v8::String>(it->vendor_id.c_str()).ToLocalChecked());
-				Nan::Set(
-					obj,
-					Nan::New("serial_number").ToLocalChecked(),
-					New<v8::String>(it->serial_number.c_str()).ToLocalChecked());
-				Nan::Set(
-					obj,
-					Nan::New("product_id").ToLocalChecked(),
-					New<v8::String>(it->product_id.c_str()).ToLocalChecked());
-				Nan::Set(
-					obj,
-					Nan::New("drive_letter").ToLocalChecked(),
-					New<v8::String>(it->drive_letter.c_str()).ToLocalChecked());
-
-				Nan::Set(device_list, 0, obj);
-			}
-
-			/*Nan::Set(
-				obj,
-				Nan::New("device_number").ToLocalChecked(),
-				New<v8::Number>(data->device_number));
-			Nan::Set(
-				obj,
-				Nan::New("device_status").ToLocalChecked(),
-				New<v8::Number>(data->device_status));
-			Nan::Set(
-				obj,
-				Nan::New("vendor_id").ToLocalChecked(),
-				New<v8::String>(data->vendor_id.c_str()).ToLocalChecked());
-			Nan::Set(
-				obj,
-				Nan::New("serial_number").ToLocalChecked(),
-				New<v8::String>(data->serial_number.c_str()).ToLocalChecked());
-			Nan::Set(
-				obj,
-				Nan::New("product_id").ToLocalChecked(),
-				New<v8::String>(data->product_id.c_str()).ToLocalChecked());
-			Nan::Set(
-				obj,
-				Nan::New("drive_letter").ToLocalChecked(),
-				New<v8::String>(data->drive_letter.c_str()).ToLocalChecked());*/
-
-			v8::Local<v8::Value> argv[] = { device_list };
+			v8::Local<v8::Value> obj = Preparev8Object(data);
+			v8::Local<v8::Value> argv[] = { obj };
 
 #if !defined(_DEBUG) || defined(_TEST_NODE_) 
 			progress->Call(1, argv);
@@ -172,11 +74,72 @@ NAN_METHOD(SpyOff)
 	cv.notify_one();
 }
 
+NAN_METHOD(GetAvailableUSBDevices)
+{
+	std::cout << "In get usbs" << std::endl;
+	std::list<Device *> usbs = GetUSBDevices();
+	v8::Local<v8::Array> result = New<v8::Array>(usbs.size());
+
+	std::list<Device*>::iterator it;
+	int i = 0;
+	for (it = usbs.begin(); it != usbs.end(); ++it)
+	{
+		v8::Local<v8::Value> val = Preparev8Object(*it);
+		Nan::Set(result, i, val);
+		i++;
+	}
+
+	info.GetReturnValue().Set(result);
+}
+
+NAN_METHOD(GetUSBDeviceByDeviceLetter)
+{
+	std::string param1(*v8::String::Utf8Value(info[0]->ToString()));
+
+	Device *device = GetUSBDeviceByLetter(param1);
+
+	info.GetReturnValue().Set(Preparev8Object(device));
+}
+
 NAN_MODULE_INIT(Init)
 {
 	Set(target, New<v8::String>("spyOn").ToLocalChecked(), New<v8::FunctionTemplate>(SpyOn)->GetFunction());
 	Set(target, New<v8::String>("spyOff").ToLocalChecked(), New<v8::FunctionTemplate>(SpyOff)->GetFunction());
+	Set(target, New<v8::String>("getAvailableUSBDevices").ToLocalChecked(), New<v8::FunctionTemplate>(GetAvailableUSBDevices)->GetFunction());
+	Set(target, New<v8::String>("getUSBDeviceByDeviceLetter").ToLocalChecked(), New<v8::FunctionTemplate>(GetUSBDeviceByDeviceLetter)->GetFunction());
 	StartSpying();
+}
+
+v8::Local<v8::Value> Preparev8Object(const Device * data)
+{
+	v8::Local<v8::Object> device = Nan::New<v8::Object>();
+
+	Nan::Set(
+		device,
+		Nan::New("device_number").ToLocalChecked(),
+		New<v8::Number>(data->device_number));
+	Nan::Set(
+		device,
+		Nan::New("device_status").ToLocalChecked(),
+		New<v8::Number>(data->device_status));
+	Nan::Set(
+		device,
+		Nan::New("vendor_id").ToLocalChecked(),
+		New<v8::String>(data->vendor_id.c_str()).ToLocalChecked());
+	Nan::Set(
+		device,
+		Nan::New("serial_number").ToLocalChecked(),
+		New<v8::String>(data->serial_number.c_str()).ToLocalChecked());
+	Nan::Set(
+		device,
+		Nan::New("product_id").ToLocalChecked(),
+		New<v8::String>(data->product_id.c_str()).ToLocalChecked());
+	Nan::Set(
+		device,
+		Nan::New("drive_letter").ToLocalChecked(),
+		New<v8::String>(data->drive_letter.c_str()).ToLocalChecked());
+
+	return device;
 }
 
 void StartSpying()

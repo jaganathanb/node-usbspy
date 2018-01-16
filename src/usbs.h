@@ -40,5 +40,6 @@ void AddDevice(Device *item);
 Device *GetDeviceToBeRemoved(std::list<std::string> keys);
 Device *GetUSBDeviceByLetter(std::string device_letter);
 std::list<Device *> GetUSBDevices();
+void ClearUSBDeviceList();
 
 #endif
