@@ -1,131 +1,13 @@
-#include "usbs.h"
+#include "usbspy.h"
 
-using Nan::AsyncProgressQueueWorker;
-using Nan::AsyncQueueWorker;
-using Nan::Callback;
-using Nan::HandleScope;
-using Nan::New;
-using Nan::To;
+using namespace Nan;
 
-std::mutex spyMutext;
-std::condition_variable spyConditionVar;
+std::mutex m;
+std::condition_variable cv;
 bool ready = false;
 
-#define __TEST_MODE__ 1
-
-const typename AsyncProgressQueueWorker<Device>::ExecutionProgress *globalProgress;
-
-void processData(const typename AsyncProgressQueueWorker<Device>::ExecutionProgress &progress)
-{
-	globalProgress = &progress;
-
-	PopulateAvailableUSBDeviceList(false);
-
-	std::thread worker(SpyingThread);
-
-#ifdef __TEST_MODE__
-	worker.join();
-#else
-	worker.detach();
-#endif // __TEST_MODE__
-}
-
-DWORD WINAPI SpyingThread()
-{
-	char className[MAX_THREAD_WINDOW_NAME];
-	_snprintf_s(className, MAX_THREAD_WINDOW_NAME, "ListnerThreadUsbDetection_%d", GetCurrentThreadId());
-
-	WNDCLASSA wincl = {0};
-	wincl.hInstance = GetModuleHandle(0);
-	wincl.lpszClassName = className;
-	wincl.lpfnWndProc = SpyCallback;
-
-	if (!RegisterClassA(&wincl))
-	{
-		DWORD le = GetLastError();
-		printf("RegisterClassA() failed [Error: %x]\r\n", le);
-		return 1;
-	}
-
-	HWND hwnd = CreateWindowExA(WS_EX_TOPMOST, className, className, 0, 0, 0, 0, 0, NULL, 0, 0, 0);
-	if (!hwnd)
-	{
-		DWORD le = GetLastError();
-		printf("CreateWindowExA() failed [Error: %x]\r\n", le);
-		return 1;
-	}
-
-	DEV_BROADCAST_DEVICEINTERFACE_A notifyFilter = {0};
-	notifyFilter.dbcc_size = sizeof(notifyFilter);
-	notifyFilter.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
-	notifyFilter.dbcc_classguid = {
-		0xA5DCBF10L,
-		0x6530,
-		0x11D2,
-		0x90,
-		0x1F,
-		0x00,
-		0xC0,
-		0x4F,
-		0xB9,
-		0x51,
-		0xED};
-
-	HDEVNOTIFY hDevNotify = RegisterDeviceNotificationA(hwnd, &notifyFilter, DEVICE_NOTIFY_WINDOW_HANDLE);
-	if (!hDevNotify)
-	{
-		DWORD le = GetLastError();
-		printf("RegisterDeviceNotificationA() failed [Error: %x]\r\n", le);
-		return 1;
-	}
-	std::cout << "before gets message \n"
-			  << std::endl;
-	MSG msg;
-	while (TRUE)
-	{
-		BOOL bRet = GetMessage(&msg, hwnd, 0, 0);
-		if ((bRet == 0) || (bRet == -1))
-		{
-			break;
-		}
-
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
-	}
-
-	return 0;
-}
-
-LRESULT CALLBACK SpyCallback(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-	if (msg == WM_DEVICECHANGE)
-	{
-		if (DBT_DEVICEARRIVAL == wParam || DBT_DEVICEREMOVECOMPLETE == wParam)
-		{
-			PDEV_BROADCAST_HDR pHdr = (PDEV_BROADCAST_HDR)lParam;
-			PDEV_BROADCAST_DEVICEINTERFACE pDevInf;
-
-			if (pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE)
-			{
-				pDevInf = (PDEV_BROADCAST_DEVICEINTERFACE)pHdr;
-				Device *device;
-
-				std::this_thread::sleep_for(std::chrono::seconds(3));
-
-				device = PopulateAvailableUSBDeviceList(DBT_DEVICEARRIVAL != wParam);
-
-				if (ready)
-				{
-#ifndef __TEST_MODE__
-					globalProgress->Send(device, 1);
-#endif // !__TEST_MODE__
-				}
-			}
-		}
-	}
-
-	return 1;
-}
+void processData(const typename AsyncProgressQueueWorker<Device>::ExecutionProgress &progress);
+v8::Local<v8::Value> Preparev8Object(const Device *data);
 
 template <typename T>
 class ProgressQueueWorker : public AsyncProgressQueueWorker<T>
@@ -142,54 +24,33 @@ class ProgressQueueWorker : public AsyncProgressQueueWorker<T>
 
 	void Execute(const typename AsyncProgressQueueWorker<T>::ExecutionProgress &progress)
 	{
-		std::unique_lock<std::mutex> lk(spyMutext);
+		std::unique_lock<std::mutex> lk(m);
 
 		processData(progress);
 
 		while (ready)
 		{
-			spyConditionVar.wait(lk);
+			cv.wait(lk);
 		}
 
 		lk.unlock();
-		spyConditionVar.notify_one();
+		cv.notify_one();
+		ClearUSBDeviceList();
 	}
 
 	void HandleProgressCallback(const T *data, size_t count)
 	{
 		HandleScope scope;
-		v8::Local<v8::Object> obj = Nan::New<v8::Object>();
 
-		Nan::Set(
-			obj,
-			Nan::New("deviceNumber").ToLocalChecked(),
-			New<v8::Number>(data->deviceNumber));
-		Nan::Set(
-			obj,
-			Nan::New("deviceStatus").ToLocalChecked(),
-			New<v8::Number>(data->deviceStatus));
-		Nan::Set(
-			obj,
-			Nan::New("vendorId").ToLocalChecked(),
-			New<v8::String>(data->vendorId.c_str()).ToLocalChecked());
-		Nan::Set(
-			obj,
-			Nan::New("serialNumber").ToLocalChecked(),
-			New<v8::String>(data->serialNumber.c_str()).ToLocalChecked());
-		Nan::Set(
-			obj,
-			Nan::New("productId").ToLocalChecked(),
-			New<v8::String>(data->productId.c_str()).ToLocalChecked());
-		Nan::Set(
-			obj,
-			Nan::New("driveLetter").ToLocalChecked(),
-			New<v8::String>(data->driveLetter.c_str()).ToLocalChecked());
+		if (data)
+		{
+			v8::Local<v8::Value> obj = Preparev8Object(data);
+			v8::Local<v8::Value> argv[] = {obj};
 
-		v8::Local<v8::Value> argv[] = {obj};
-
-#ifndef __TEST_MODE__
-		progress->Call(1, argv);
-#endif // __TEST_MODE__
+#if !defined(_DEBUG) || defined(_TEST_NODE_)
+			progress->Call(1, argv);
+#endif
+		}
 	}
 
   private:
@@ -198,48 +59,109 @@ class ProgressQueueWorker : public AsyncProgressQueueWorker<T>
 
 NAN_METHOD(SpyOn)
 {
-#ifdef __TEST_MODE__
+#if defined(_DEBUG) && !defined(_TEST_NODE_)
 	Callback *progress = new Callback();
 	Callback *callback = new Callback();
 #else
 	Callback *progress = new Callback(To<v8::Function>(info[0]).ToLocalChecked());
 	Callback *callback = new Callback(To<v8::Function>(info[1]).ToLocalChecked());
-#endif // __TEST_MODE__
+#endif
 
 	AsyncQueueWorker(new ProgressQueueWorker<Device>(callback, progress));
-}
-
-void StartSpying()
-{
-	{
-		std::lock_guard<std::mutex> lk(spyMutext);
-		ready = true;
-		std::cout << "main() signals data ready for processing\n"
-				  << std::endl;
-	}
-	spyConditionVar.notify_one();
-
-#ifdef __TEST_MODE__
-	New<v8::FunctionTemplate>(SpyOn)->GetFunction()->CallAsConstructor(0, {});
-#endif // !__TEST_MODE__
 }
 
 NAN_METHOD(SpyOff)
 {
 	{
-		std::lock_guard<std::mutex> lk(spyMutext);
+		std::lock_guard<std::mutex> lk(m);
 		ready = false;
 		std::cout << "main() signals data  not ready for processing\n"
 				  << std::endl;
 	}
-	spyConditionVar.notify_one();
+	cv.notify_one();
+}
+
+NAN_METHOD(GetAvailableUSBDevices)
+{
+	std::cout << "In get usbs" << std::endl;
+	std::list<Device *> usbs = GetUSBDevices();
+	v8::Local<v8::Array> result = Nan::New<v8::Array>(usbs.size());
+
+	std::list<Device *>::iterator it;
+	int i = 0;
+	for (it = usbs.begin(); it != usbs.end(); ++it)
+	{
+		v8::Local<v8::Value> val = Preparev8Object(*it);
+		Nan::Set(result, i, val);
+		i++;
+	}
+
+	info.GetReturnValue().Set(result);
+	std::cout << "Out usbs" << std::endl;
+}
+
+NAN_METHOD(GetUSBDeviceByDeviceLetter)
+{
+	std::string param1(*v8::String::Utf8Value(info[0]->ToString()));
+
+	Device *device = GetUSBDeviceByLetter(param1);
+
+	info.GetReturnValue().Set(Preparev8Object(device));
 }
 
 NAN_MODULE_INIT(Init)
 {
-	Nan::Set(target, New<v8::String>("spyOn").ToLocalChecked(), New<v8::FunctionTemplate>(SpyOn)->GetFunction());
-	Nan::Set(target, New<v8::String>("spyOff").ToLocalChecked(), New<v8::FunctionTemplate>(SpyOff)->GetFunction());
+	Set(target, New<v8::String>("spyOn").ToLocalChecked(), New<v8::FunctionTemplate>(SpyOn)->GetFunction());
+	Set(target, New<v8::String>("spyOff").ToLocalChecked(), New<v8::FunctionTemplate>(SpyOff)->GetFunction());
+	Set(target, New<v8::String>("getAvailableUSBDevices").ToLocalChecked(), New<v8::FunctionTemplate>(GetAvailableUSBDevices)->GetFunction());
+	Set(target, New<v8::String>("getUSBDeviceByDeviceLetter").ToLocalChecked(), New<v8::FunctionTemplate>(GetUSBDeviceByDeviceLetter)->GetFunction());
 	StartSpying();
+}
+
+v8::Local<v8::Value> Preparev8Object(const Device *data)
+{
+	v8::Local<v8::Object> device = Nan::New<v8::Object>();
+
+	Nan::Set(
+		device,
+		Nan::New("device_number").ToLocalChecked(),
+		New<v8::Number>(data->device_number));
+	Nan::Set(
+		device,
+		Nan::New("device_status").ToLocalChecked(),
+		New<v8::Number>(data->device_status));
+	Nan::Set(
+		device,
+		Nan::New("vendor_id").ToLocalChecked(),
+		New<v8::String>(data->vendor_id.c_str()).ToLocalChecked());
+	Nan::Set(
+		device,
+		Nan::New("serial_number").ToLocalChecked(),
+		New<v8::String>(data->serial_number.c_str()).ToLocalChecked());
+	Nan::Set(
+		device,
+		Nan::New("product_id").ToLocalChecked(),
+		New<v8::String>(data->product_id.c_str()).ToLocalChecked());
+	Nan::Set(
+		device,
+		Nan::New("drive_letter").ToLocalChecked(),
+		New<v8::String>(data->drive_letter.c_str()).ToLocalChecked());
+
+	return device;
+}
+
+void StartSpying()
+{
+	{
+		std::lock_guard<std::mutex> lk(m);
+		ready = true;
+		std::cout << "Listening..." << std::endl;
+	}
+	cv.notify_one();
+
+#if defined(_DEBUG) && !defined(_TEST_NODE_)
+	New<v8::FunctionTemplate>(SpyOn)->GetFunction()->CallAsConstructor(0, {});
+#endif
 }
 
 NODE_MODULE(usbspy, Init)
