@@ -20,5 +20,12 @@ asyncProgEE.spyOff = () => {
     ap.spyOff();
 }
 
+asyncProgEE.getAvailableUSBDevices = () => {
+    return ap.getAvailableUSBDevices();
+};
+
+asyncProgEE.getUSBDeviceByDeviceLetter = (letter) => {
+    return ap.getUSBDeviceByDeviceLetter(letter);
+};
 
 module.exports = asyncProgEE;

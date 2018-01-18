@@ -3,10 +3,10 @@
     {
       "target_name": "usbspy",
       "sources": [
-        "src/usbspy.cpp",
+        "src/usbs.h",
         "src/usbspy.h",
         "src/usbs.cpp",
-        "src/usbs.h"
+        "src/usbspy.cpp"
       ],
       "include_dirs" : [
         "<!(node -e \"require('nan')\")"
