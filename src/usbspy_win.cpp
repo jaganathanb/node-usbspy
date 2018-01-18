@@ -13,7 +13,7 @@ GUID GUID_DEVINTERFACE_USB_DEVICE = {
 	0x4F,
 	0xB9,
 	0x51,
-	0xED };
+	0xED};
 
 const typename AsyncProgressQueueWorker<Device>::ExecutionProgress *globalProgress;
 
@@ -22,7 +22,7 @@ void processData(const typename AsyncProgressQueueWorker<Device>::ExecutionProgr
 	globalProgress = &progress;
 
 	PopulateAvailableUSBDeviceList();
-	
+
 	std::thread worker(SpyingThread);
 
 #ifdef _DEBUG
@@ -37,7 +37,7 @@ DWORD WINAPI SpyingThread()
 	char className[MAX_THREAD_WINDOW_NAME];
 	_snprintf_s(className, MAX_THREAD_WINDOW_NAME, "ListnerThreadUsbDetection_%d", GetCurrentThreadId());
 
-	WNDCLASSA wincl = { 0 };
+	WNDCLASSA wincl = {0};
 	wincl.hInstance = GetModuleHandle(0);
 	wincl.lpszClassName = className;
 	wincl.lpfnWndProc = SpyCallback;
@@ -57,7 +57,7 @@ DWORD WINAPI SpyingThread()
 		return 1;
 	}
 
-	DEV_BROADCAST_DEVICEINTERFACE_A notifyFilter = { 0 };
+	DEV_BROADCAST_DEVICEINTERFACE_A notifyFilter = {0};
 	notifyFilter.dbcc_size = sizeof(notifyFilter);
 	notifyFilter.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
 	notifyFilter.dbcc_classguid = GUID_DEVINTERFACE_USB_DEVICE;
@@ -70,7 +70,7 @@ DWORD WINAPI SpyingThread()
 		return 1;
 	}
 	std::cout << "before gets message \n"
-		<< std::endl;
+			  << std::endl;
 	MSG msg;
 	while (TRUE)
 	{
@@ -100,7 +100,7 @@ DWORD GetUSBDriveDetails(UINT drive_number IN, Device *device OUT)
 
 	// Get a handle to physical drive
 	HANDLE drive_handle = ::CreateFile(drive_letter, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
-		NULL, OPEN_EXISTING, 0, NULL);
+									   NULL, OPEN_EXISTING, 0, NULL);
 
 	if (INVALID_HANDLE_VALUE == drive_handle)
 		return ::GetLastError();
@@ -112,12 +112,12 @@ DWORD GetUSBDriveDetails(UINT drive_number IN, Device *device OUT)
 	query.QueryType = PropertyStandardQuery;
 
 	// Get the necessary output buffer size
-	STORAGE_DESCRIPTOR_HEADER header = { 0 };
+	STORAGE_DESCRIPTOR_HEADER header = {0};
 	DWORD bytes_returned = 0;
 	if (!::DeviceIoControl(drive_handle, IOCTL_STORAGE_QUERY_PROPERTY,
-		&query, sizeof(STORAGE_PROPERTY_QUERY),
-		&header, sizeof(STORAGE_DESCRIPTOR_HEADER),
-		&bytes_returned, NULL))
+						   &query, sizeof(STORAGE_PROPERTY_QUERY),
+						   &header, sizeof(STORAGE_DESCRIPTOR_HEADER),
+						   &bytes_returned, NULL))
 	{
 		return_value = ::GetLastError();
 		::CloseHandle(drive_handle);
@@ -131,9 +131,9 @@ DWORD GetUSBDriveDetails(UINT drive_number IN, Device *device OUT)
 
 	// Get the storage device descriptor
 	if (!::DeviceIoControl(drive_handle, IOCTL_STORAGE_QUERY_PROPERTY,
-		&query, sizeof(STORAGE_PROPERTY_QUERY),
-		buffer, buffer_size,
-		&bytes_returned, NULL))
+						   &query, sizeof(STORAGE_PROPERTY_QUERY),
+						   buffer, buffer_size,
+						   &bytes_returned, NULL))
 	{
 		return_value = ::GetLastError();
 		delete[] buffer;
@@ -176,9 +176,9 @@ DWORD GetUSBDriveDetails(UINT drive_number IN, Device *device OUT)
 
 	STORAGE_DEVICE_NUMBER sdn;
 	if (!DeviceIoControl(drive_handle,
-		IOCTL_STORAGE_GET_DEVICE_NUMBER, &query, sizeof(STORAGE_PROPERTY_QUERY),
-		&sdn, sizeof(sdn),
-		&bytes_returned, NULL))
+						 IOCTL_STORAGE_GET_DEVICE_NUMBER, &query, sizeof(STORAGE_PROPERTY_QUERY),
+						 &sdn, sizeof(sdn),
+						 &bytes_returned, NULL))
 	{
 		return_value = ::GetLastError();
 		delete[] buffer;
@@ -224,7 +224,7 @@ void PopulateAvailableUSBDeviceList()
 				device->device_status = (int)Connect;
 				AddDevice(device);
 				std::cout << "Device " << device->drive_letter << " (" << device->product_id << ")"
-					<< " is been added!" << std::endl;
+						  << " is been added!" << std::endl;
 			}
 		}
 	}
@@ -254,7 +254,7 @@ Device *GetUSBDeviceDetails(bool adjustDeviceList)
 				{
 					keys.push_back(device->GetKey());
 					std::cout << "Device " << device->vendor_id << " (" << device->product_id << ")"
-						<< " is already there in the list!" << std::endl;
+							  << " is already there in the list!" << std::endl;
 					delete device; // check wether it is needed or not
 					device = NULL;
 				}
@@ -271,7 +271,8 @@ Device *GetUSBDeviceDetails(bool adjustDeviceList)
 					device->device_status = (int)Connect;
 					AddDevice(device);
 					std::cout << "Device " << device->drive_letter << " (" << device->product_id << ")"
-						<< " is been added!" << std::endl;
+							  << " is been added!" << std::endl;
+					break; // if new device is found, exit.
 				}
 			}
 		}
@@ -292,7 +293,7 @@ Device *GetUSBDeviceDetails(bool adjustDeviceList)
 			device->device_status = (int)Disconnect;
 
 			std::cout << "Device " << device->drive_letter << " (" << device->product_id << ")"
-				<< " is been removed!" << std::endl;
+					  << " is been removed!" << std::endl;
 		}
 	}
 
@@ -317,10 +318,14 @@ LRESULT CALLBACK SpyCallback(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 				device = GetUSBDeviceDetails(DBT_DEVICEARRIVAL != wParam);
 
-				globalProgress->Send(device, 1);
+				if (device)
+				{
+					globalProgress->Send(device, 1);
 
-				if (DBT_DEVICEARRIVAL != wParam && device) {
-					delete device;
+					if (DBT_DEVICEARRIVAL != wParam)
+					{
+						delete device;
+					}
 				}
 			}
 		}

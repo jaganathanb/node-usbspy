@@ -104,7 +104,6 @@ Device *GetUSBDeviceByLetter(std::string device_letter) {
 }
 
 void ClearUSBDeviceList() {
-	Device *device;
 	std::map<std::string, Device*>::iterator it;
 	for (it = deviceMap.begin(); it != deviceMap.end(); ++it)
 	{

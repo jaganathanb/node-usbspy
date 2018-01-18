@@ -37,7 +37,7 @@ public:
 	void HandleProgressCallback(const T *data, size_t count) {
 		HandleScope scope;
 
-		if (data != NULL) {
+		if (data) {
 			v8::Local<v8::Value> obj = Preparev8Object(data);
 			v8::Local<v8::Value> argv[] = { obj };
 
@@ -78,7 +78,7 @@ NAN_METHOD(GetAvailableUSBDevices)
 {
 	std::cout << "In get usbs" << std::endl;
 	std::list<Device *> usbs = GetUSBDevices();
-	v8::Local<v8::Array> result = New<v8::Array>(usbs.size());
+	v8::Local<v8::Array> result = Nan::New<v8::Array>(usbs.size());
 
 	std::list<Device*>::iterator it;
 	int i = 0;
@@ -90,6 +90,7 @@ NAN_METHOD(GetAvailableUSBDevices)
 	}
 
 	info.GetReturnValue().Set(result);
+	std::cout << "Out usbs" << std::endl;
 }
 
 NAN_METHOD(GetUSBDeviceByDeviceLetter)
