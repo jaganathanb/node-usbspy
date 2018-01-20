@@ -1,20 +1,21 @@
 var usbspy = require('../index');
 
-usbspy.on('change', function(data) {
-    console.log(data);
+usbspy.spyOn().then(function() {
+
+    usbspy.on('change', function(data) {
+        console.log(data);
+    });
+    
+    usbspy.on('end', function(data) {
+        console.log(data);
+    });
+
+    console.log(usbspy.getAvailableUSBDevices());
+
+    console.log(usbspy.getUSBDeviceByPropertyName('device_letter', 'D:\\'));
+
+    console.log(usbspy.getUSBDeviceByPropertyName('device_number', 1));
 });
-
-usbspy.on('end', function(data) {
-    console.log(data);
-});
-
-usbspy.spyOn();
-
-console.log(usbspy.getAvailableUSBDevices());
-
-console.log(usbspy.getUSBDeviceByPropertyName('device_letter', 'G:\\'));
-
-console.log(usbspy.getUSBDeviceByPropertyName('device_number', 1));
 
 // console.log(usbspy.getUSBDeviceByPropertyName('serial_number', 'known serial number for the product'));
 

@@ -65,9 +65,11 @@ NAN_METHOD(SpyOn)
 #else
 	Callback *progress = new Callback(To<v8::Function>(info[0]).ToLocalChecked());
 	Callback *callback = new Callback(To<v8::Function>(info[1]).ToLocalChecked());
+	Callback *notify = new Callback(To<v8::Function>(info[2]).ToLocalChecked());
 #endif
 
 	AsyncQueueWorker(new ProgressQueueWorker<Device>(callback, progress));
+	notify->Call(0, NULL); // notify everything is ready!
 }
 
 NAN_METHOD(SpyOff)

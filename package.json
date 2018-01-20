@@ -12,6 +12,7 @@
   "gypfile": true,
   "dependencies": {
     "bindings": "^1.3.0",
-    "nan": "^2.8.0"
+    "nan": "^2.8.0",
+    "es6-promise": "^4.2.2"
   }
 }
