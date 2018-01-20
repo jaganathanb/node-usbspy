@@ -220,10 +220,10 @@ void PopulateAvailableUSBDeviceList()
 				key = key.append(device->vendor_id).append(device->product_id).append(device->serial_number);
 
 				device->SetKey(key);
-				device->drive_letter = drive_letter;
+				device->device_letter = drive_letter;
 				device->device_status = (int)Connect;
 				AddDevice(device);
-				std::cout << "Device " << device->drive_letter << " (" << device->product_id << ")"
+				std::cout << "Device " << device->device_letter << " (" << device->product_id << ")"
 						  << " is been added!" << std::endl;
 			}
 		}
@@ -246,11 +246,11 @@ Device *GetUSBDeviceDetails(bool adjustDeviceList)
 		if (drives_bitmask & (1 << drive))
 		{
 			_stprintf(drive_letter, _T("%c:\\"), 'A' + drive);
-			device = GetUSBDeviceByPropertyName(drive_letter);
+			device = GetUSBDeviceByPropertyName("device_letter", drive_letter);
 
 			if (GetDriveType(drive_letter) == DRIVE_REMOVABLE)
 			{
-				if (device && device->drive_letter == drive_letter)
+				if (device && device->device_letter == drive_letter)
 				{
 					keys.push_back(device->GetKey());
 					std::cout << "Device " << device->vendor_id << " (" << device->product_id << ")"
@@ -267,10 +267,10 @@ Device *GetUSBDeviceDetails(bool adjustDeviceList)
 					key = key.append(device->vendor_id).append(device->product_id).append(device->serial_number);
 
 					device->SetKey(key);
-					device->drive_letter = drive_letter;
+					device->device_letter = drive_letter;
 					device->device_status = (int)Connect;
 					AddDevice(device);
-					std::cout << "Device " << device->drive_letter << " (" << device->product_id << ")"
+					std::cout << "Device " << device->device_letter << " (" << device->product_id << ")"
 							  << " is been added!" << std::endl;
 					break; // if new device is found, exit.
 				}
@@ -292,7 +292,7 @@ Device *GetUSBDeviceDetails(bool adjustDeviceList)
 			delete deviceToBeRemoved;
 			device->device_status = (int)Disconnect;
 
-			std::cout << "Device " << device->drive_letter << " (" << device->product_id << ")"
+			std::cout << "Device " << device->device_letter << " (" << device->product_id << ")"
 					  << " is been removed!" << std::endl;
 		}
 	}

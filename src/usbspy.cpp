@@ -59,7 +59,7 @@ class ProgressQueueWorker : public AsyncProgressQueueWorker<T>
 
 NAN_METHOD(SpyOn)
 {
-#if defined(l_DEBUG) && !defined(l_TEST_NODE_)
+#if defined(_DEBUG) && !defined(_TEST_NODE_)
 	Callback *progress = new Callback();
 	Callback *callback = new Callback();
 #else
@@ -98,9 +98,15 @@ NAN_METHOD(GetAvailableUSBDevices)
 
 NAN_METHOD(GetUSBDeviceByPropertyName)
 {
-	std::string param1(*v8::String::Utf8Value(info[0]->ToString()));
+	if (info.Length() < 2)
+	{
+		return Nan::ThrowSyntaxError("getUSBDeviceByPropertyName function should called with paramters property_name and the corresponding value.");
+	}
 
-	Device *device = GetUSBDeviceByPropertyName(param1);
+	std::string property_name(*v8::String::Utf8Value(info[0]->ToString()));
+	std::string value(*v8::String::Utf8Value(info[1]->ToString()));
+
+	Device *device = GetUSBDeviceByPropertyName(property_name, value);
 
 	info.GetReturnValue().Set(Preparev8Object(device));
 }
@@ -141,7 +147,7 @@ v8::Local<v8::Value> Preparev8Object(const Device *data)
 	Nan::Set(
 		device,
 		Nan::New("drive_letter").ToLocalChecked(),
-		New<v8::String>(data->drive_letter.c_str()).ToLocalChecked());
+		New<v8::String>(data->device_letter.c_str()).ToLocalChecked());
 
 	return device;
 }
