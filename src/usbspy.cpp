@@ -59,7 +59,7 @@ class ProgressQueueWorker : public AsyncProgressQueueWorker<T>
 
 NAN_METHOD(SpyOn)
 {
-#if defined(_DEBUG) && !defined(_TEST_NODE_)
+#if defined(l_DEBUG) && !defined(l_TEST_NODE_)
 	Callback *progress = new Callback();
 	Callback *callback = new Callback();
 #else
@@ -75,15 +75,12 @@ NAN_METHOD(SpyOff)
 	{
 		std::lock_guard<std::mutex> lk(m);
 		ready = false;
-		std::cout << "main() signals data  not ready for processing\n"
-				  << std::endl;
 	}
 	cv.notify_one();
 }
 
 NAN_METHOD(GetAvailableUSBDevices)
 {
-	std::cout << "In get usbs" << std::endl;
 	std::list<Device *> usbs = GetUSBDevices();
 	v8::Local<v8::Array> result = Nan::New<v8::Array>(usbs.size());
 
@@ -97,14 +94,13 @@ NAN_METHOD(GetAvailableUSBDevices)
 	}
 
 	info.GetReturnValue().Set(result);
-	std::cout << "Out usbs" << std::endl;
 }
 
-NAN_METHOD(GetUSBDeviceByDeviceLetter)
+NAN_METHOD(GetUSBDeviceByPropertyName)
 {
 	std::string param1(*v8::String::Utf8Value(info[0]->ToString()));
 
-	Device *device = GetUSBDeviceByLetter(param1);
+	Device *device = GetUSBDeviceByPropertyName(param1);
 
 	info.GetReturnValue().Set(Preparev8Object(device));
 }
@@ -114,7 +110,7 @@ NAN_MODULE_INIT(Init)
 	Set(target, New<v8::String>("spyOn").ToLocalChecked(), New<v8::FunctionTemplate>(SpyOn)->GetFunction());
 	Set(target, New<v8::String>("spyOff").ToLocalChecked(), New<v8::FunctionTemplate>(SpyOff)->GetFunction());
 	Set(target, New<v8::String>("getAvailableUSBDevices").ToLocalChecked(), New<v8::FunctionTemplate>(GetAvailableUSBDevices)->GetFunction());
-	Set(target, New<v8::String>("getUSBDeviceByDeviceLetter").ToLocalChecked(), New<v8::FunctionTemplate>(GetUSBDeviceByDeviceLetter)->GetFunction());
+	Set(target, New<v8::String>("getUSBDeviceByPropertyName").ToLocalChecked(), New<v8::FunctionTemplate>(GetUSBDeviceByPropertyName)->GetFunction());
 	StartSpying();
 }
 

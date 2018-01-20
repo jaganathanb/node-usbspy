@@ -246,7 +246,7 @@ Device *GetUSBDeviceDetails(bool adjustDeviceList)
 		if (drives_bitmask & (1 << drive))
 		{
 			_stprintf(drive_letter, _T("%c:\\"), 'A' + drive);
-			device = GetUSBDeviceByLetter(drive_letter);
+			device = GetUSBDeviceByPropertyName(drive_letter);
 
 			if (GetDriveType(drive_letter) == DRIVE_REMOVABLE)
 			{

@@ -17,10 +17,7 @@
             'sources': [
               "src/usbspy_win.cpp"
             ],
-            'include_dirs+':
-            [
-              # Not needed now
-            ]
+            'include_dirs+': []
           }
         ]
       ]

@@ -87,7 +87,7 @@ std::list<Device *> GetUSBDevices()
 	return deviceList;
 }
 
-Device *GetUSBDeviceByLetter(std::string device_letter)
+Device *GetUSBDeviceByPropertyName(std::string device_letter)
 {
 	Device *device = NULL;
 	std::map<std::string, Device *>::iterator it;
