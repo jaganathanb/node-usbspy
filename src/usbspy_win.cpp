@@ -93,10 +93,8 @@ DWORD GetUSBDriveDetails(UINT drive_number IN, Device *device OUT)
 
 	// Format physical drive path (may be '\\.\PhysicalDrive0', '\\.\PhysicalDrive1' and so on).
 	TCHAR drive_letter[260];
-	//sprintf(szBuf, "\\\\?\\%c:", 'A' + drive);
-	//strDrivePath.Format(_T("\\\\.\\%c:"), 'A' + drive_number);
-
-	_stprintf(drive_letter, _T("\\\\.\\%c:"), 'A' + drive_number);
+	
+	sprintf(drive_letter, "\\\\.\\%c:", char(65 + drive_number));
 
 	// Get a handle to physical drive
 	HANDLE drive_handle = ::CreateFile(drive_letter, 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -210,7 +208,7 @@ void PopulateAvailableUSBDeviceList()
 	{
 		if (drives_bitmask & (1 << drive))
 		{
-			_stprintf(drive_letter, _T("%c:\\"), 'A' + drive);
+			sprintf(drive_letter, "%c:\\", char(int('A') + drive));
 			if (GetDriveType(drive_letter) == DRIVE_REMOVABLE)
 			{
 				device = new Device;
@@ -245,7 +243,7 @@ Device *GetUSBDeviceDetails(bool adjustDeviceList)
 	{
 		if (drives_bitmask & (1 << drive))
 		{
-			_stprintf(drive_letter, _T("%c:\\"), 'A' + drive);
+			sprintf(drive_letter, "%c:\\", char(int('A') + drive));
 			device = GetUSBDeviceByPropertyName("device_letter", drive_letter);
 
 			if (GetDriveType(drive_letter) == DRIVE_REMOVABLE)
