@@ -14,6 +14,7 @@
       'conditions': [
         ['OS=="win"',
           {
+            "cflags": ["-std=c++11"]
             'sources': [
               "src/usbspy_win.cpp"
             ],
