@@ -10,14 +10,14 @@ void processData(const typename AsyncProgressQueueWorker<Device>::ExecutionProgr
 v8::Local<v8::Value> Preparev8Object(const Device *data);
 
 template <typename T>
-class ProgressQueueWorker : public AsyncProgressQueueWorker<T>
+class USBSpyWorker : public AsyncProgressQueueWorker<T>
 {
   public:
-	ProgressQueueWorker(Callback *callback, Callback *progress) : AsyncProgressQueueWorker<T>(callback), progress(progress)
+	USBSpyWorker(Callback *callback, Callback *progress) : AsyncProgressQueueWorker<T>(callback), progress(progress)
 	{
 	}
 
-	~ProgressQueueWorker()
+	~USBSpyWorker()
 	{
 		delete progress;
 	}
@@ -62,14 +62,17 @@ NAN_METHOD(SpyOn)
 #if defined(_DEBUG) && !defined(_TEST_NODE_)
 	Callback *progress = new Callback();
 	Callback *callback = new Callback();
+	Callback *notify = new Callback();
 #else
 	Callback *progress = new Callback(To<v8::Function>(info[0]).ToLocalChecked());
 	Callback *callback = new Callback(To<v8::Function>(info[1]).ToLocalChecked());
 	Callback *notify = new Callback(To<v8::Function>(info[2]).ToLocalChecked());
 #endif
 
-	AsyncQueueWorker(new ProgressQueueWorker<Device>(callback, progress));
+	AsyncQueueWorker(new USBSpyWorker<Device>(callback, progress));
+#if defined(_TEST_NODE_) || !defined(_DEBUG)
 	notify->Call(0, NULL); // notify everything is ready!
+#endif
 }
 
 NAN_METHOD(SpyOff)

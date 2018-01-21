@@ -69,8 +69,7 @@ DWORD WINAPI SpyingThread()
 		printf("RegisterDeviceNotificationA() failed [Error: %x]\r\n", le);
 		return 1;
 	}
-	std::cout << "before gets message \n"
-			  << std::endl;
+
 	MSG msg;
 	while (TRUE)
 	{
