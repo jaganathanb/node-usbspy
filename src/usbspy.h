@@ -9,7 +9,6 @@
 #include <condition_variable>
 #include <dbt.h>
 #include <tchar.h>
-#include <algorithm>
 
 #include "usbs.h"
 
