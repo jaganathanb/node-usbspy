@@ -12,7 +12,7 @@ typedef struct Device_t
 	std::string serial_number;
 	std::string product_id;
 	std::string vendor_id;
-	std::string drive_letter;
+	std::string device_letter;
 
 	void SetKey(std::string key)
 	{
@@ -33,13 +33,23 @@ typedef enum device_status_t {
 	Connect
 } device_status;
 
+enum USBProperties {
+	InvaildProperty = -1,
+	DeviceStatus,
+	DeviceNumber,
+	DeviceLetter,
+	SerialNumber,
+	ProductId,
+	VendorId
+};
+
 bool HasDevice(std::string key);
 void MapDeviceProps(Device *destiDevice, Device *sourceDevice);
 Device *GetDevice(std::string key);
 void RemoveDevice(Device *item);
 void AddDevice(Device *item);
 Device *GetDeviceToBeRemoved(std::list<std::string> keys);
-Device *GetUSBDeviceByLetter(std::string device_letter);
+Device *GetUSBDeviceByPropertyName(std::string property_name, std::string value);
 std::list<Device *> GetUSBDevices();
 void ClearUSBDeviceList();
 

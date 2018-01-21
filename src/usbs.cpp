@@ -34,7 +34,7 @@ void MapDeviceProps(Device *destiDevice, Device *sourceDevice)
 	destiDevice->product_id = sourceDevice->product_id;
 	destiDevice->serial_number = sourceDevice->serial_number;
 	destiDevice->device_number = sourceDevice->device_number;
-	destiDevice->drive_letter = sourceDevice->drive_letter;
+	destiDevice->device_letter = sourceDevice->device_letter;
 	destiDevice->SetKey(sourceDevice->GetKey());
 }
 
@@ -87,15 +87,56 @@ std::list<Device *> GetUSBDevices()
 	return deviceList;
 }
 
-Device *GetUSBDeviceByLetter(std::string device_letter)
+USBProperties ResolveUSBProperty(std::string property_name) {
+	static const std::map<std::string, USBProperties> usbPropMap{
+		{ "device_status", DeviceStatus },
+	{ "device_number", DeviceNumber },
+	{"device_letter", DeviceLetter},
+	{"serial_number", SerialNumber},
+	{"product_id", ProductId},
+	{"vendor_id", VendorId}
+	};
+
+	auto itr = usbPropMap.find(property_name);
+	if (itr != usbPropMap.end()) {
+		return itr->second;
+	}
+	return InvaildProperty;
+}
+
+Device *GetUSBDeviceByPropertyName(std::string property_name, std::string value)
 {
 	Device *device = NULL;
 	std::map<std::string, Device *>::iterator it;
 	for (it = deviceMap.begin(); it != deviceMap.end(); ++it)
 	{
 		Device *item = it->second;
+		bool found = false;
 
-		if (item->drive_letter == device_letter)
+		switch (ResolveUSBProperty(property_name))
+		{
+		case DeviceLetter:
+			found = item->device_letter == value;
+			break;
+		case DeviceNumber:
+			found = item->device_number == atoi(value.c_str());
+			break;
+		case SerialNumber:
+			found = item->serial_number == value;
+			break;
+		case ProductId:
+			found = item->product_id == value;
+			break;
+		case VendorId:
+			found = item->vendor_id == value;
+			break;
+
+		default:
+			found = item->device_status == 1;
+			break;
+		}
+
+		if (found)
 		{
 			device = new Device;
 			MapDeviceProps(device, item);

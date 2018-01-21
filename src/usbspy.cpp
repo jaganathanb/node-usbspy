@@ -65,9 +65,11 @@ NAN_METHOD(SpyOn)
 #else
 	Callback *progress = new Callback(To<v8::Function>(info[0]).ToLocalChecked());
 	Callback *callback = new Callback(To<v8::Function>(info[1]).ToLocalChecked());
+	Callback *notify = new Callback(To<v8::Function>(info[2]).ToLocalChecked());
 #endif
 
 	AsyncQueueWorker(new ProgressQueueWorker<Device>(callback, progress));
+	notify->Call(0, NULL); // notify everything is ready!
 }
 
 NAN_METHOD(SpyOff)
@@ -75,15 +77,12 @@ NAN_METHOD(SpyOff)
 	{
 		std::lock_guard<std::mutex> lk(m);
 		ready = false;
-		std::cout << "main() signals data  not ready for processing\n"
-				  << std::endl;
 	}
 	cv.notify_one();
 }
 
 NAN_METHOD(GetAvailableUSBDevices)
 {
-	std::cout << "In get usbs" << std::endl;
 	std::list<Device *> usbs = GetUSBDevices();
 	v8::Local<v8::Array> result = Nan::New<v8::Array>(usbs.size());
 
@@ -97,14 +96,19 @@ NAN_METHOD(GetAvailableUSBDevices)
 	}
 
 	info.GetReturnValue().Set(result);
-	std::cout << "Out usbs" << std::endl;
 }
 
-NAN_METHOD(GetUSBDeviceByDeviceLetter)
+NAN_METHOD(GetUSBDeviceByPropertyName)
 {
-	std::string param1(*v8::String::Utf8Value(info[0]->ToString()));
+	if (info.Length() < 2)
+	{
+		return Nan::ThrowSyntaxError("getUSBDeviceByPropertyName function should called with paramters property_name and the corresponding value.");
+	}
 
-	Device *device = GetUSBDeviceByLetter(param1);
+	std::string property_name(*v8::String::Utf8Value(info[0]->ToString()));
+	std::string value(*v8::String::Utf8Value(info[1]->ToString()));
+
+	Device *device = GetUSBDeviceByPropertyName(property_name, value);
 
 	info.GetReturnValue().Set(Preparev8Object(device));
 }
@@ -114,7 +118,7 @@ NAN_MODULE_INIT(Init)
 	Set(target, New<v8::String>("spyOn").ToLocalChecked(), New<v8::FunctionTemplate>(SpyOn)->GetFunction());
 	Set(target, New<v8::String>("spyOff").ToLocalChecked(), New<v8::FunctionTemplate>(SpyOff)->GetFunction());
 	Set(target, New<v8::String>("getAvailableUSBDevices").ToLocalChecked(), New<v8::FunctionTemplate>(GetAvailableUSBDevices)->GetFunction());
-	Set(target, New<v8::String>("getUSBDeviceByDeviceLetter").ToLocalChecked(), New<v8::FunctionTemplate>(GetUSBDeviceByDeviceLetter)->GetFunction());
+	Set(target, New<v8::String>("getUSBDeviceByPropertyName").ToLocalChecked(), New<v8::FunctionTemplate>(GetUSBDeviceByPropertyName)->GetFunction());
 	StartSpying();
 }
 
@@ -145,7 +149,7 @@ v8::Local<v8::Value> Preparev8Object(const Device *data)
 	Nan::Set(
 		device,
 		Nan::New("drive_letter").ToLocalChecked(),
-		New<v8::String>(data->drive_letter.c_str()).ToLocalChecked());
+		New<v8::String>(data->device_letter.c_str()).ToLocalChecked());
 
 	return device;
 }
