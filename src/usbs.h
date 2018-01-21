@@ -1,6 +1,7 @@
 #ifndef USBS_H
 #define USBS_H
 
+#include <algorithm>
 #include <map>
 #include <list>
 #include <string>
