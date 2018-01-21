@@ -11,7 +11,6 @@ addons:
       - ubuntu-toolchain-r-test
     packages:
       - g++-4.8
-      - xvfb
 
 
 env:
@@ -22,10 +21,9 @@ cache:
     - node_modules
 
 before_install:
-  - npm install -g npm@latest
+  - npm install -g node-gyp@latest
+  - npm --add-python-to-path='true' --debug install --global windows-build-tools
 
 install:
   - export CXX="g++-4.8"
-  - export DISPLAY=':99.0'
-  - Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
   - npm install
