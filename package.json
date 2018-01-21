@@ -1,6 +1,6 @@
 {
   "name": "node-usbspy",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "An event based node.js c++ addon/binding to retrive the connected usb storage devices and detect the storage device insertion/removal and notifify the subscribed apps",
   "main": "index.js",
   "scripts": {
