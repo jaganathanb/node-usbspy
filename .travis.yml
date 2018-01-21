@@ -22,7 +22,6 @@ cache:
 
 before_install:
   - npm install -g node-gyp@latest
-  - npm --add-python-to-path='true' --debug install --global windows-build-tools
 
 install:
   - export CXX="g++-4.8"
