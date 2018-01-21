@@ -7,11 +7,13 @@
 #include <chrono>
 #include <mutex>
 #include <condition_variable>
-#include <dbt.h>
 #include <tchar.h>
 
 #include "usbs.h"
 
+#define DBT_DEVICEARRIVAL	0x8000
+#define DBT_DEVICEREMOVECOMPLETE	0x8004
+#define DBT_DEVTYP_DEVICEINTERFACE 5
 #define MAX_THREAD_WINDOW_NAME 64
 
 #define _TEST_NODE_
