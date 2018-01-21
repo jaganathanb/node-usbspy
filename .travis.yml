@@ -6,9 +6,6 @@ dist: trusty
 sudo: required
 
 # Build matrix
-os:
-- linux
-- osx
 env:
   matrix:
   - TRAVIS_NODE_VERSION="4"
@@ -17,14 +14,6 @@ env:
   - TRAVIS_NODE_VERSION="6" ARCH="x86"
   - BINARY_BUILDER="true" TRAVIS_NODE_VERSION="8"
   - BINARY_BUILDER="true" TRAVIS_NODE_VERSION="8" ARCH="x86"
-matrix:
-  exclude:
-  - os: osx
-    env: TRAVIS_NODE_VERSION="4" ARCH="x86"
-  - os: osx
-    env: TRAVIS_NODE_VERSION="6" ARCH="x86"
-  - os: osx
-    env: BINARY_BUILDER="true" TRAVIS_NODE_VERSION="8" ARCH="x86"
 
 cache:
   directories:
@@ -62,13 +51,6 @@ before_install:
 - node --version
 - node -p 'process.platform + "@" + process.arch'
 - npm --version
-
-# figure out if we should publish
-- PUBLISH_BINARY=false
-- echo $TRAVIS_BRANCH
-- echo `git describe --tags --always HEAD`
-- if [[ $TRAVIS_BRANCH == `git describe --tags --always HEAD` ]]; then PUBLISH_BINARY=$BINARY_BUILDER; fi;
-- echo "Publishing native platform Binary Package? ->" $PUBLISH_BINARY
 
 install:
 # ensure source install works
