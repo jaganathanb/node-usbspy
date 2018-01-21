@@ -15,6 +15,10 @@
 #define DBT_DEVTYP_DEVICEINTERFACE 5
 #define MAX_THREAD_WINDOW_NAME 64
 
+typedef unsigned long       DWORD;
+typedef int                 BOOL;
+typedef unsigned char       BYTE;
+
 typedef struct _DEV_BROADCAST_DEVICEINTERFACE_W {
 	DWORD dbcc_size;
 	DWORD dbcc_devicetype;
