@@ -1,3 +1,5 @@
+##### Note: Designed for Windows
+
 # node-usbspy
 An event based node.js c++ addon/binding to retrive the connected usb storage devices and detect the storage device insertion/removal and notifify the subscribed apps.
 
