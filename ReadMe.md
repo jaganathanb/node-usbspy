@@ -142,3 +142,5 @@ setTimeout(() => {
     usbspy.spyOff();
 }, 5000); // after 5 secs, would stop wathcing for device change.
 ```
+##### Note:
+When you DEBUG the c++ code, you have to comment the line#18 in the `usbspy.h`
