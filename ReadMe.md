@@ -98,10 +98,10 @@ When the addon is ready, `callback` would be called with `true` which indicates 
 #### spyOff()
 `spyOff` should be called when you wanted to stop listening for the usb device change.
 
-#### getAvailableUSBDevices()
-`getAvailableUSBDevices` would written list of `Device` objects if available otherwise empty list would be returned. This method does not take any arguments.
+#### getAvailableUSBStorageDevices()
+`getAvailableUSBStorageDevices` would written list of `Device` objects if available otherwise empty list would be returned. This method does not take any arguments.
 
-#### getUSBDeviceByPropertyName(propertyName<string>, value<string|number>)
+#### getUSBStorageDeviceByPropertyName(propertyName<string>, value<string|number>)
 This method takes two arguments. The `propertyName` could be any of the `Device` properties. The `value` should be the actual value of the property. This method returns `Device` object if the property/value passed matches any of the available usb storage devices.
     
 
@@ -131,11 +131,11 @@ usbspy.spyOn().then(function() {
         console.log(data);
     });
 
-    console.log(usbspy.getAvailableUSBDevices());
+    console.log(usbspy.getAvailableUSBStorageDevices());
 
-    console.log(usbspy.getUSBDeviceByPropertyName('device_letter', 'D:\\'));
+    console.log(usbspy.getUSBStorageDeviceByPropertyName('device_letter', 'D:\\'));
 
-    console.log(usbspy.getUSBDeviceByPropertyName('device_number', 1));
+    console.log(usbspy.getUSBStorageDeviceByPropertyName('device_number', 1));
 });
 
 setTimeout(() => {

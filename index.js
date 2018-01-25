@@ -13,14 +13,14 @@ if (global[index.name] && global[index.name].version === index.version) {
     var ready = false;
 
     usbspy.spyOn = function (callback) {
-        var promise = new Promise(function(resolve, reject) {
+        var promise = new Promise(function (resolve, reject) {
             console.log(ready);
             if (!ready) {
                 usbspyBinding.spyOn(function (data) {
                     usbspy.emit('change', data);
                 }, function (data) {
                     usbspy.emit('end', data);
-                }, function() {
+                }, function () {
                     resolve(true);
                     callback(true);
                 });
@@ -30,7 +30,7 @@ if (global[index.name] && global[index.name].version === index.version) {
                 callback(false);
             }
         });
-        
+
         return promise;
     }
 
@@ -41,16 +41,16 @@ if (global[index.name] && global[index.name].version === index.version) {
         }
     }
 
-    usbspy.getAvailableUSBDevices = function () {
-        return usbspyBinding.getAvailableUSBDevices();
+    usbspy.getAvailableUSBStorageDevices = function () {
+        return usbspyBinding.getAvailableUSBStorageDevices();
     };
 
-    usbspy.getUSBDeviceByPropertyName = function (propertyName, value) {
-        return usbspyBinding.getUSBDeviceByPropertyName(propertyName, value);
+    usbspy.getUSBStorageDeviceByPropertyName = function (propertyName, value) {
+        return usbspyBinding.getUSBStorageDeviceByPropertyName(propertyName, value);
     };
 
     usbspy.version = index.version;
-	global[index.name] = usbspy;
+    global[index.name] = usbspy;
 
-	module.exports = usbspy;
+    module.exports = usbspy;
 }

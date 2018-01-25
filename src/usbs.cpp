@@ -72,7 +72,7 @@ Device *GetDeviceToBeRemoved(std::list<std::string> keys)
 	return deviceToBeRemoved;
 }
 
-std::list<Device *> GetUSBDevices()
+std::list<Device *> GetUSBStorageDevices()
 {
 	std::list<Device *> deviceList = {};
 	Device *device;
@@ -104,7 +104,7 @@ USBProperties ResolveUSBProperty(std::string property_name) {
 	return InvaildProperty;
 }
 
-Device *GetUSBDeviceByPropertyName(std::string property_name, std::string value)
+Device *GetUSBStorageDeviceByPropertyName(std::string property_name, std::string value)
 {
 	Device *device = NULL;
 	std::map<std::string, Device *>::iterator it;

@@ -84,9 +84,9 @@ NAN_METHOD(SpyOff)
 	cv.notify_one();
 }
 
-NAN_METHOD(GetAvailableUSBDevices)
+NAN_METHOD(GetAvailableUSBStorageDevices)
 {
-	std::list<Device *> usbs = GetUSBDevices();
+	std::list<Device *> usbs = GetUSBStorageDevices();
 	v8::Local<v8::Array> result = Nan::New<v8::Array>(usbs.size());
 
 	std::list<Device *>::iterator it;
@@ -101,17 +101,17 @@ NAN_METHOD(GetAvailableUSBDevices)
 	info.GetReturnValue().Set(result);
 }
 
-NAN_METHOD(GetUSBDeviceByPropertyName)
+NAN_METHOD(GetUSBStorageDeviceByPropertyName)
 {
 	if (info.Length() < 2)
 	{
-		return Nan::ThrowSyntaxError("getUSBDeviceByPropertyName function should called with paramters property_name and the corresponding value.");
+		return Nan::ThrowSyntaxError("getUSBStorageDeviceByPropertyName function should called with paramters property_name and the corresponding value.");
 	}
 
 	std::string property_name(*v8::String::Utf8Value(info[0]->ToString()));
 	std::string value(*v8::String::Utf8Value(info[1]->ToString()));
 
-	Device *device = GetUSBDeviceByPropertyName(property_name, value);
+	Device *device = GetUSBStorageDeviceByPropertyName(property_name, value);
 
 	info.GetReturnValue().Set(Preparev8Object(device));
 }
@@ -120,8 +120,8 @@ NAN_MODULE_INIT(Init)
 {
 	Set(target, New<v8::String>("spyOn").ToLocalChecked(), New<v8::FunctionTemplate>(SpyOn)->GetFunction());
 	Set(target, New<v8::String>("spyOff").ToLocalChecked(), New<v8::FunctionTemplate>(SpyOff)->GetFunction());
-	Set(target, New<v8::String>("getAvailableUSBDevices").ToLocalChecked(), New<v8::FunctionTemplate>(GetAvailableUSBDevices)->GetFunction());
-	Set(target, New<v8::String>("getUSBDeviceByPropertyName").ToLocalChecked(), New<v8::FunctionTemplate>(GetUSBDeviceByPropertyName)->GetFunction());
+	Set(target, New<v8::String>("getAvailableUSBStorageDevices").ToLocalChecked(), New<v8::FunctionTemplate>(GetAvailableUSBStorageDevices)->GetFunction());
+	Set(target, New<v8::String>("getUSBStorageDeviceByPropertyName").ToLocalChecked(), New<v8::FunctionTemplate>(GetUSBStorageDeviceByPropertyName)->GetFunction());
 	StartSpying();
 }
 
