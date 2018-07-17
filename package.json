@@ -31,10 +31,10 @@
   "dependencies": {
     "bindings": "^1.3.0",
     "es6-promise": "^4.2.2",
-    "nan": "^2.8.0",
-    "prebuild-install": "^2.5.0"
+    "nan": "^2.10.0",
+    "prebuild-install": "^2.5.3"
   },
   "devDependencies": {
-    "prebuild": "^7.2.2"
+    "prebuild": "^7.6.0"
   }
 }
