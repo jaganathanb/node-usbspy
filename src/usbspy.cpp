@@ -129,6 +129,15 @@ v8::Local<v8::Value> Preparev8Object(const Device *data)
 {
 	v8::Local<v8::Object> device = Nan::New<v8::Object>();
 
+	if (!data)
+	{
+		Nan::Set(
+			device,
+			Nan::New("device_status").ToLocalChecked(),
+			New<v8::Number>(0));
+		return device;
+	}
+
 	Nan::Set(
 		device,
 		Nan::New("device_number").ToLocalChecked(),
